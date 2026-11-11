@@ -208,6 +208,18 @@ domain code, no global state, and no new dependency beyond those listed. The two
 hash chain are the only added complexity and are justified above. Security scope remains honest: the
 increment claims no sandbox because it executes no tools.
 
+## Handoff State (for a fresh session)
+
+- **Present**: `spec.md` (grilled, 12 clarifications), `plan.md`, `research.md`, `data-model.md`,
+  `contracts/` (5 files), `quickstart.md`, `checklists/requirements.md`, feature memory files,
+  `docs/domain_knowledge/CONTEXT.md`, ADRs 0001–0006, root `AGENTS.md`.
+- **Not yet created**: `tasks.md` (next artifact, `/speckit.tasks`) and all source code.
+- **Branch**: `001-multi-agent-framework`; `main` equals `dev`; nothing has been pushed.
+- **Toolchain verified**: `go1.27.3 darwin/arm64`; `go build`, `go vet`, `go test -count=1`,
+  `go test -race`, and `CGO_ENABLED=0 go build` all pass (see [research.md](research.md) R1 for the
+  quarantine caveat).
+- **Resume order**: `AGENTS.md` → `spec.md` → this plan → `research.md` → `contracts/` → `quickstart.md`.
+
 ## Out of Scope (explicit)
 
 Roles, task board, messaging, memory (short/long term, RAG, semantic cache, vector/graph), tool
