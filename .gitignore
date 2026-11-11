@@ -43,3 +43,6 @@ credentials.*
 .DS_Store
 notes/
 
+
+# pnpm debug output (recreated by tooling, never part of the repo)
+.pnpm-debug.log
