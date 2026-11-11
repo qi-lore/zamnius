@@ -19,6 +19,8 @@ All decisions below were verified against live module metadata on 2026-11-11.
 
 **Consequence for this environment**: `go` **is** available. Verified 2026-11-11: `go1.27.3 darwin/arm64` at `/Users/aiagent/.local/go/bin/go` (on `PATH`, `GOTOOLCHAIN=auto`). Development runs on 1.27.3; CI targets the latest stable, 1.27.4. No toolchain installation task is required.
 
+**Toolchain caveat (encountered and resolved)**: the installed tree carried `com.apple.quarantine`, so every tool binary was killed on exec — `go build` and `go tool compile -V` both failed with exit 137 and the misleading message `signal: killed`. Clearing the attribute (`xattr -dr com.apple.quarantine /Users/aiagent/.local/go`) fixed it; afterwards `go build`, `go vet`, `go test -count=1`, `go test -race`, and `CGO_ENABLED=0 go build` all pass. Any future fresh install on this host should be checked the same way before diagnosing a phantom compilation failure.
+
 ---
 
 ## R2. Durable state store
