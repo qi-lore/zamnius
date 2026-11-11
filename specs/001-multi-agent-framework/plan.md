@@ -19,8 +19,7 @@ uncommitted attempt from recorded inputs with idempotent side effects.
 
 ## Technical Context
 
-**Language/Version**: Go 1.25 minimum in `go.mod`; developed and tested on Go 1.27.4 (current stable).
-**Note**: no Go toolchain is installed on this host — installation is task 1.
+**Language/Version**: Go 1.25 minimum in `go.mod`; development toolchain verified on this host as **go1.27.3 darwin/arm64** (`/Users/aiagent/.local/go/bin/go`); CI targets the latest stable, 1.27.4 (released 2026-11-02).
 
 **Primary Dependencies** (all versions verified 2026-11-11):
 `modernc.org/sqlite v1.62.0` (pure Go, no cgo) · `github.com/goccy/go-yaml v1.19.2` ·
@@ -150,8 +149,8 @@ increment does not need.
 
 ## Execution Sequencing (input for `/speckit.tasks`)
 
-1. **Toolchain & skeleton**: install Go, `go mod init github.com/hIMEI29A/zamnius`, package skeleton,
-   `go build ./...` and `go vet ./...` green.
+1. **Skeleton**: `go mod init github.com/hIMEI29A/zamnius`, package skeleton, `go build ./...` and
+   `go vet ./...` green on go1.27.3.
 2. **Config & definitions**: strict loaders, canonicalisation, fingerprint, validation messages
    (SC-012) — TDD from the JSON Schema.
 3. **Persistence**: schema + migrations, atomic commit helper, artifact CAS, lease SQL; concurrency test
@@ -187,7 +186,7 @@ package below 60%. Coverage is a floor, not a substitute for the scenario tests.
 | SIGKILL tests flake in CI | deterministic fault points for boundary logic; subprocess kill test repeated 10× with generous timeouts; failures print the event timeline |
 | Provider variability breaks structured output | request `json_schema`, fall back once to `json_object`, always validate locally; `invalid_response` is terminal and recorded |
 | Scope creep toward P4–P8 | plan and tasks limited to P1–P3; anything else becomes a new feature spec |
-| No Go toolchain on this host | task 1 installs it; no code is written before `go build ./...` succeeds |
+| No Go toolchain in CI before the first build | `go build ./...` runs as task 1 (verified locally on go1.27.3), so a broken module setup fails before any feature work |
 | Two stores (DB + files) drift | files written before rows; orphan sweep; `Verify` cross-checks rows against content |
 | Leaked secrets through tool output | no tools in this increment; redaction applied before event persistence and asserted by `test/secrets` |
 
