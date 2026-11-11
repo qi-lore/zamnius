@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hIMEI29A/zamnius/specs/001-multi-agent-framework/contracts/workflow-definition.schema.json",
+  "title": "Zamnius workflow definition",
+  "description": "Canonical shape of a workflow definition. YAML, JSON, and TOML documents decode into this shape; both declarative files and programmatic builders validate against it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name", "phases"],
+  "properties": {
+    "version": { "type": "string", "const": "1" },
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "minLength": 1, "maxLength": 120 },
+    "description": { "type": "string", "maxLength": 2000 },
+    "budget": { "$ref": "#/$defs/budget" },
+    "defaults": { "$ref": "#/$defs/phaseDefaults" },
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/phase" }
+    }
+  },
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "description": "Go duration syntax restricted to a single unit, e.g. 30s, 5m, 2h."
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "attempts": { "type": "integer", "minimum": 1 },
+        "wall_clock": { "$ref": "#/$defs/duration" },
+        "tokens": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_attempts"],
+      "properties": {
+        "max_attempts": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "backoff": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "initial": { "$ref": "#/$defs/duration" },
+            "max": { "$ref": "#/$defs/duration" },
+            "multiplier": { "type": "number", "minimum": 1, "maximum": 10 }
+          }
+        },
+        "retry_on": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["transient", "rate_limited", "auth", "permanent", "context_overflow", "invalid_response", "timeout", "budget_exhausted", "cancelled", "internal"]
+          }
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["after_phase", "outcome"],
+      "properties": {
+        "after_phase": { "type": "string" },
+        "outcome": { "type": "string", "enum": ["succeeded", "failed", "any"] }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "instructions", "model"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "minLength": 1, "maxLength": 80 },
+        "instructions": { "type": "string", "minLength": 1, "maxLength": 20000 },
+        "model": { "$ref": "#/$defs/model" },
+        "budget": { "$ref": "#/$defs/budget" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "name"],
+      "properties": {
+        "provider": { "type": "string", "enum": ["openai-compatible"] },
+        "name": { "type": "string", "minLength": 1 },
+        "base_url": { "type": "string", "format": "uri" },
+        "max_output_tokens": { "type": "integer", "minimum": 1 },
+        "temperature": { "type": "number", "minimum": 0, "maximum": 2 }
+      }
+    },
+    "branch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "agent"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "minLength": 1, "maxLength": 80 },
+        "agent": { "$ref": "#/$defs/agent" },
+        "budget": { "$ref": "#/$defs/budget" },
+        "timeout": { "$ref": "#/$defs/duration" }
+      }
+    },
+    "join": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule"],
+      "properties": {
+        "rule": { "type": "string", "enum": ["all", "any", "n_of_m"] },
+        "n": { "type": "integer", "minimum": 2 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "rule": { "const": "n_of_m" } }, "required": ["rule"] },
+          "then": { "required": ["n"] },
+          "else": { "not": { "required": ["n"] } }
+        }
+      ]
+    },
+    "phaseDefaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "retry": { "$ref": "#/$defs/retry" },
+        "timeout": { "$ref": "#/$defs/duration" },
+        "budget": { "$ref": "#/$defs/budget" },
+        "on_failure": { "type": "string", "enum": ["abort", "continue", "escalate"] }
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "mode"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "minLength": 1, "maxLength": 80 },
+        "mode": { "type": "string", "enum": ["single", "fanout"] },
+        "agent": { "$ref": "#/$defs/agent" },
+        "branches": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/branch" }
+        },
+        "join": { "$ref": "#/$defs/join" },
+        "depends_on": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "when": { "$ref": "#/$defs/condition" },
+        "retry": { "$ref": "#/$defs/retry" },
+        "timeout": { "$ref": "#/$defs/duration" },
+        "budget": { "$ref": "#/$defs/budget" },
+        "on_failure": { "type": "string", "enum": ["abort", "continue", "escalate"] },
+        "outputs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^(plan|diff|report|evidence|aggregate|log|custom:[a-z0-9-]+)$" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "single" } }, "required": ["mode"] },
+          "then": {
+            "required": ["agent"],
+            "not": { "anyOf": [{ "required": ["branches"] }, { "required": ["join"] }] }
+          }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "fanout" } }, "required": ["mode"] },
+          "then": {
+            "required": ["branches", "join"],
+            "not": { "required": ["agent"] }
+          }
+        }
+      ]
+    }
+  }
+}
