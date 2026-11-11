@@ -10,7 +10,7 @@ Related: [contracts/cli.md](contracts/cli.md), [contracts/store.md](contracts/st
 
 | Requirement | Check | Notes |
 |---|---|---|
-| Go 1.25 or newer | `go version` | Current stable is 1.27.4. **Not installed on the planning host — install before implementing.** |
+| Go 1.25 or newer | `go version` | Verified locally: `go1.27.3 darwin/arm64` at `/Users/aiagent/.local/go/bin/go`; CI targets 1.27.4 |
 | No cgo required | `CGO_ENABLED=0 go build ./...` | The SQLite driver is pure Go by design (research R2) |
 | POSIX filesystem | any Linux/macOS | Atomic `rename` and `fsync` are relied upon |
 | Optional: model key | `echo $ZAMNIUS_MODEL_API_KEY` | Not needed for scenarios marked *offline* |
