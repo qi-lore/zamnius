@@ -17,7 +17,7 @@ All decisions below were verified against live module metadata on 2026-11-11.
 
 **Alternatives considered**: Pinning `go 1.27` (simple, but needlessly narrow); omitting the version (invalid for modules since 1.21).
 
-**Consequence for this environment**: `go` is **not installed** on the planning host. Implementation cannot start until a toolchain is present; the plan's first task is toolchain installation and `go build ./...` verification.
+**Consequence for this environment**: `go` **is** available. Verified 2026-11-11: `go1.27.3 darwin/arm64` at `/Users/aiagent/.local/go/bin/go` (on `PATH`, `GOTOOLCHAIN=auto`). Development runs on 1.27.3; CI targets the latest stable, 1.27.4. No toolchain installation task is required.
 
 ---
 
