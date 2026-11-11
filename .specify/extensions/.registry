@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "extensions": {
+    "branch-convention": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:7efe1bfce264c25a4eddce6d65aa74ebc63a532b82e2d82264155e82c39d3859",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "opencode": [
+          "speckit.branch-convention.configure",
+          "speckit.branch-convention.validate",
+          "speckit.branch-convention.rename"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-11-11T13:54:12.629126+00:00"
+    },
+    "draft": {
+      "version": "1.2.0",
+      "source": "local",
+      "manifest_hash": "sha256:753b320ef1a3816c02023589698977d19d4f77efc5d2ca23081ac525fe0890ae",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "opencode": [
+          "speckit.draft.create",
+          "speckit.draft.new"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-11-11T13:54:29.907630+00:00"
+    },
+    "memory-md": {
+      "version": "0.9.7",
+      "source": "local",
+      "manifest_hash": "sha256:1a109acdbaf20e1e0967bc37fb1fc904558a223713800fa8137c924c0ccad007",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "opencode": [
+          "speckit.memory-md.init",
+          "speckit.memory-md.specify",
+          "speckit.memory-md.plan-with-memory",
+          "speckit.memory-md.capture",
+          "speckit.memory-md.capture-from-diff",
+          "speckit.memory-md.audit",
+          "speckit.memory-md.repair-index",
+          "speckit.memory-md.log-finding",
+          "speckit.memory-md.token-report",
+          "speckit.memory-md.prepare-context",
+          "speckit.memory-md.index-docs",
+          "speckit.memory-md.init-project",
+          "speckit.memory-md.share-lesson",
+          "speckit.memory-md.sync-shared"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-11-11T13:54:48.030814+00:00"
+    },
+    "grill-specify": {
+      "version": "0.1.0",
+      "source": "local",
+      "manifest_hash": "sha256:b6a1bbee4ab611e4f21e37021d6a6432f6e79a0a19c663f66e16bceeaff33a4b",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "opencode": [
+          "speckit.grill-specify.with-docs",
+          "speckit.grill-specify.auto"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-11-11T13:55:15.045949+00:00"
+    },
+    "token-budget": {
+      "version": "1.1.0",
+      "source": "local",
+      "manifest_hash": "sha256:be1fbbd21d0cce6cd32f048ffad331a68d268947aead092681ee5e5d8667a3d0",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "opencode": [
+          "speckit.token-budget.compact",
+          "speckit.token-budget.scope",
+          "speckit.token-budget.concise",
+          "speckit.token-budget.usage",
+          "speckit.token-budget.restore"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-11-11T13:56:21.997930+00:00"
+    },
+    "wiki": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:0b4b9b3b306ccd3cbf9094d93cada6f5b10cafcc79e330867356cda0a53e137a",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "opencode": [
+          "speckit.wiki.init",
+          "speckit.wiki.ingest",
+          "speckit.wiki.query",
+          "speckit.wiki.lint",
+          "speckit.wiki.status"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-11-11T13:57:20.622738+00:00"
+    }
+  }
+}

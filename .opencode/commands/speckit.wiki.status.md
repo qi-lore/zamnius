@@ -1,0 +1,1 @@
+../../.specify/extensions/wiki/.specify-dev/agent-commands/opencode/speckit.wiki.status.md

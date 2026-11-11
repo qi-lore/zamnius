@@ -1,0 +1,1 @@
+../../.specify/extensions/grill-specify/.specify-dev/agent-commands/opencode/speckit.grill-specify.auto.md

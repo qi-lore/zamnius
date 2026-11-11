@@ -1,0 +1,1 @@
+../../.specify/extensions/memory-md/.specify-dev/agent-commands/opencode/speckit.memory-md.init.md

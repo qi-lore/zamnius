@@ -1,0 +1,132 @@
+installed:
+- branch-convention
+- draft
+- grill-specify
+- memory-md
+- token-budget
+- wiki
+settings:
+  auto_execute_hooks: true
+hooks:
+  before_specify:
+  - extension: branch-convention
+    command: speckit.branch-convention.validate
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Validate branch naming convention before creating new feature?
+    description: Check naming convention compliance before /specify creates a new
+      branch
+    condition: null
+  - extension: draft
+    command: speckit.draft.create
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Create a new draft for a specification?
+    description: ''
+    condition: null
+  - extension: memory-md
+    command: speckit.memory-md.specify
+    enabled: true
+    optional: false
+    priority: 10
+    prompt: Would you like to prepare memory context before writing this spec?
+    description: ''
+    condition: null
+  before_plan:
+  - extension: memory-md
+    command: speckit.memory-md.plan-with-memory
+    enabled: true
+    optional: false
+    priority: 10
+    prompt: Would you like to synthesize project memory before planning?
+    description: ''
+    condition: null
+  - extension: token-budget
+    command: speckit.token-budget.scope
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Scope a focused reading manifest for /speckit.plan?
+    description: Scope reading manifest before planning
+    condition: null
+  after_implement:
+  - extension: memory-md
+    command: speckit.memory-md.capture
+    enabled: true
+    optional: false
+    priority: 10
+    prompt: Would you like to capture durable lessons from this feature into project
+      memory?
+    description: ''
+    condition: null
+  - extension: wiki
+    command: speckit.wiki.ingest
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Record what this implementation taught into the project wiki?
+    description: Capture implementation learnings into the wiki after implementation
+    condition: null
+  after_specify:
+  - extension: grill-specify
+    command: speckit.grill-specify.auto
+    enabled: true
+    optional: false
+    priority: 5
+    prompt: Execute speckit.grill-specify.auto?
+    description: Grill the new spec before any other after-specify step reads it
+    condition: null
+  - extension: token-budget
+    command: speckit.token-budget.compact
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Compact spec.md to reduce tokens for /speckit.plan?
+    description: Compact spec after specification
+    condition: null
+  after_plan:
+  - extension: token-budget
+    command: speckit.token-budget.compact
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Compact plan and design docs to reduce tokens for /speckit.tasks?
+    description: Compact plan docs after planning
+    condition: null
+  - extension: wiki
+    command: speckit.wiki.ingest
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Ingest this feature's research and plan decisions into the project wiki?
+    description: Compound the feature's verified research into the wiki after planning
+    condition: null
+  after_tasks:
+  - extension: token-budget
+    command: speckit.token-budget.compact
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Compact tasks.md to reduce tokens for /speckit.implement?
+    description: Compact tasks after task generation
+    condition: null
+  before_tasks:
+  - extension: token-budget
+    command: speckit.token-budget.scope
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Scope a focused reading manifest for /speckit.tasks?
+    description: Scope reading manifest before task generation
+    condition: null
+  before_implement:
+  - extension: token-budget
+    command: speckit.token-budget.scope
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Scope a focused reading manifest for /speckit.implement?
+    description: Scope reading manifest before implementation
+    condition: null

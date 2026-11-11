@@ -1,0 +1,1 @@
+../../.specify/extensions/draft/.specify-dev/agent-commands/opencode/speckit.draft.create.md
