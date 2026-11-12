@@ -129,7 +129,7 @@ Single Go module `github.com/hIMEI29A/zamnius`, per [plan.md](plan.md) §Project
 ### Implementation for User Story 2
 
 - [X] T046 [US2] Implement the resume protocol of [contracts/store.md](contracts/store.md) §5 — load the run, verify `definition_fingerprint` and `schema_version`, acquire the lease, reconcile events after the last committed position, verify the run's event chain, then continue from the current position — in `internal/engine/resume.go`, returning a terminal-or-paused state with a recorded reason on any failure instead of proceeding on partial knowledge
-- [ ] T047 [US2] Implement attempt reconciliation — an attempt with no committed outcome is marked `abandoned` with `restarted_from` and a restart cause, restarted from the phase's recorded inputs with a fresh `attempt_no`, a `resume_restart` decision record, and idempotency keys on side-effecting actions so a recorded side effect is never repeated (FR-063, US2 scenario 7) — in `internal/engine/reconcile.go`
+- [X] T047 [US2] Implement attempt reconciliation — an attempt with no committed outcome is marked `abandoned` with `restarted_from` and a restart cause, restarted from the phase's recorded inputs with a fresh `attempt_no`, a `resume_restart` decision record, and idempotency keys on side-effecting actions so a recorded side effect is never repeated (FR-063, US2 scenario 7) — in `internal/engine/reconcile.go`
 - [ ] T048 [US2] Implement the lease heartbeat — 30s default TTL, renewal at TTL/3, renewal failure demoting the run to `paused` with the cause recorded rather than continuing to write — in `internal/engine/lease.go`
 - [ ] T049 [US2] Implement the definition-drift guard — refuse to resume when the supplied fingerprint differs, name the expected and supplied fingerprints, and record the `--allow-definition-drift` override as a decision, in `internal/engine/drift.go`
 - [ ] T050 [US2] Implement schema version handling — a newer binary resuming older state either runs a recorded migration writing `state.migrated`, or refuses with `state.migration_refused` and an actionable message; never a best-effort interpretation (FR-017) — in `internal/store/sqlite/version.go`
@@ -298,8 +298,8 @@ starting the next task. Never batch several tasks into one turn or one commit.
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
   the process-hygiene documents (Principle XI, ADR-0007, ADR-0008), initialized the wiki and memory-md
-  extensions, completed T044, fixed the deferred-transaction lease defect (ADR-0009), and completed T045;
-  see `git log` for the exact head.
+  extensions, completed T044, fixed the deferred-transaction lease defect (ADR-0009), and completed T045
+  and T047; see `git log` for the exact head.
 - Toolchain: `go1.27.3 darwin/arm64` on `PATH`; `go.mod` floor is Go 1.26.
 
 ### Done (implemented and covered by a passing test)
@@ -358,15 +358,31 @@ starting the next task. Never batch several tasks into one turn or one commit.
     (data-model.md §10) implies the caller may hand a different definition; T049/T051 must decide
     whether `ResumeOptions` gains a `Definition`, and the test above will then be extended to that
     path.
+- **T047** Attempt reconciliation — `test/recoverability/reconcile_test.go`, three cases:
+  - **Crash restart links the replacement** — an attempt was `running` when the process died; resume
+    marks it `abandoned` and the restarted attempt carries `restarted_from` naming it, with a fresh
+    `attempt_no`; a phase that ran once and was not restarted records no `restarted_from`
+    (data-model §4 invariant 2, FR-063).
+  - **Pause restart links the replacement** — the owner was cancelled cleanly, so the attempt was
+    already `abandoned` before resume; the restart still names it, so a paused-then-resumed branch
+    keeps the link between the interrupted attempt and its replacement.
+  - **A restart cannot duplicate the side effect** — the increment's one side-effecting action is
+    the content-addressed artifact write. The interrupted attempt wrote its document but crashed
+    before committing the row; the restart reproduces the same bytes, so the content key (`sha256`)
+    identifies the side effect and it is recorded exactly once, owned by the restarted attempt, with
+    the abandoned attempt owning none (FR-063, FR-014, SC-003).
+  - **Implementation**: `session.restartFrom` (per phase and agent) is populated by
+    `reconcileAttempts` from the latest attempt of each agent that has no committed outcome (running
+    or already abandoned), and claimed by the next attempt of that agent via `takeRestartSource`,
+    which clears the entry so a retry of the replacement is a retry, not a second restart. The
+    idempotency key is the artifact's content hash — no schema change, no new field, because the
+    data model and contracts define none and tools (the other side-effecting surface) are deferred.
+  - **Non-vacuousness by mutation**: removing the `RestartedFrom: s.takeRestartSource(...)` wiring
+    fails both `restarted_from` tests; making the artifact body depend on the attempt id (a
+    non-idempotent side effect) fails the content-key test with the digest recorded 0 times.
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-- **T047** Attempt reconciliation — `internal/engine/reconcile.go`. A `running` attempt with no
-  committed outcome is marked `abandoned`, an `attempt.abandoned` event and a `resume_restart`
-  decision are recorded, and a succeeded attempt is reused (`session.recordRecovered` /
-  `session.recoveredBranch`). **Gaps before it can be marked done**: the restarted attempt does
-  not yet carry `restarted_from` (data-model §4 invariant 2), and idempotency keys on
-  side-effecting actions are not implemented.
 - **T048** Lease heartbeat — renewal at `leaseTTL/3` in `internal/engine/engine.go` (the drive
   loop) with renewal failure routed through `pauseWithCause`; helpers in `internal/engine/lease.go`.
   T045 covered the lease's exclusion and takeover but not yet the renewal cadence or the
@@ -409,8 +425,6 @@ starting the next task. Never batch several tasks into one turn or one commit.
 
 - `quickstart.md` scenario 1 runs `ls /tmp/zq1/runs`, which does not match the real state layout;
   fix it when the scenarios are validated in T068.
-- `internal/engine/reconcile.go` does not yet record `restarted_from` on the restarted attempt
-  (see T047 above).
 - `Engine.Resume` takes no definition, so the drift guard compares the stored snapshot against the
   run's recorded fingerprint and cannot see a workflow the operator edited between start and
   resume. Decide in T049/T051 whether `ResumeOptions` gains a `Definition` (see T045 above).
