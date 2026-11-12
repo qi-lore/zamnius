@@ -1,0 +1,14 @@
+version: "1"
+name: invalid
+description: A definition whose first phase names a mode the schema does not accept.
+phases:
+  - name: greet
+    mode: parallel
+    agent:
+      name: writer
+      instructions: This definition is deliberately invalid; the mode below is the defect.
+      model:
+        provider: openai-compatible
+        name: gpt-4.1-mini
+    outputs:
+      - plan

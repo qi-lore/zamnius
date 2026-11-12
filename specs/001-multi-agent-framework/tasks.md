@@ -102,7 +102,7 @@ Single Go module `github.com/hIMEI29A/zamnius`, per [plan.md](plan.md) §Project
 - [ ] T039 [US1] Implement the CLI dispatcher and rendering — subcommand routing, `flag`-based parsing, usage errors exiting `2`, the single-object `--json` envelope with `api_version: "1"`, human output that ends with the citable `run <id> finished: <status> (...)` line, the exit-code table of [contracts/cli.md](contracts/cli.md) §3, and `zamnius version` — in `internal/cli/cli.go` and `internal/cli/render.go`
 - [ ] T040 [US1] Implement the `run start`, `run status`, and `run artifacts` commands as thin adapters over the engine, mapping definition/config failures to exit `5` with a `hint` naming the offending setting, in `internal/cli/run.go`
 - [ ] T041 [US1] Implement `cmd/zamnius/main.go` as process entry only — bind flags, construct the app from `internal/app`, run, map the returned error to an exit code, and leave all business logic to the engine
-- [ ] T042 [US1] Add the workflow fixtures and samples — `test/testdata/workflows/hello.yaml`, `hello.json`, `hello.toml` (the same workflow three ways), `fanout.yaml` (three branches plus `all` join), `slow.yaml`, `budget-tokens.yaml`, `invalid.yaml` — plus documented copies under `examples/workflows/` with a pointer from `README.md`
+- [X] T042 [US1] Add the workflow fixtures and samples — `test/testdata/workflows/hello.yaml`, `hello.json`, `hello.toml` (the same workflow three ways), `fanout.yaml` (three branches plus `all` join), `slow.yaml`, `budget-tokens.yaml`, `invalid.yaml` — plus documented copies under `examples/workflows/` with a pointer from `README.md`
 
 **Checkpoint**: User Story 1 is fully functional and independently testable — MVP complete.
 

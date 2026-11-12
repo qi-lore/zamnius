@@ -1,0 +1,17 @@
+version = "1"
+name = "hello"
+description = "The same single-phase workflow as hello.yaml, written as TOML."
+
+[[phases]]
+name = "greet"
+mode = "single"
+outputs = ["plan"]
+
+[phases.agent]
+name = "writer"
+instructions = "Write one short greeting for the subject named in the input."
+
+[phases.agent.model]
+provider = "openai-compatible"
+name = "gpt-4.1-mini"
+max_output_tokens = 128
