@@ -124,7 +124,7 @@ Single Go module `github.com/hIMEI29A/zamnius`, per [plan.md](plan.md) §Project
 
 - [X] T043 [P] [US2] Write the fault-injection resume suite in `test/recoverability/resume_test.go` covering the four interruption points — before/after artifact rename and before/after transaction commit, through `internal/fault` — asserting for each: the resume completes, artifacts are byte-identical to the control run, completed branches are not re-executed, an `attempt.abandoned` names the interrupted attempt, a `resume_restart` decision record states the cause, and no `sha256` is committed twice for one attempt (SC-001, SC-002, SC-003); parametrise so the suite can run with `-count=10`
 - [X] T044 [P] [US2] Write the genuine-process-death harness — `TestMain` re-exec of the test binary as a child that starts a run and is killed with `SIGKILL` mid-branch, the parent then resuming in-process — in `test/recoverability/sigkill_test.go`
-- [ ] T045 [P] [US2] Write ownership and idempotence tests in `test/recoverability/ownership_test.go`: two concurrent `AcquireLease` calls on one run yield exactly one success and the loser gets `ErrRunAlreadyOwned`; resuming a terminal run exits `0` and appends no events (FR-018); a resume after lease expiry records `run.taken_over` with the previous owner; resuming with a mismatched definition fingerprint is refused with an actionable diagnostic unless `--allow-definition-drift` is set, in which case the override is recorded as a decision
+- [X] T045 [P] [US2] Write ownership and idempotence tests in `test/recoverability/ownership_test.go`: two concurrent `AcquireLease` calls on one run yield exactly one success and the loser gets `ErrRunAlreadyOwned`; resuming a terminal run exits `0` and appends no events (FR-018); a resume after lease expiry records `run.taken_over` with the previous owner; resuming with a mismatched definition fingerprint is refused with an actionable diagnostic unless `--allow-definition-drift` is set, in which case the override is recorded as a decision
 
 ### Implementation for User Story 2
 
@@ -294,9 +294,12 @@ starting the next task. Never batch several tasks into one turn or one commit.
 - `CGO_ENABLED=0 go build ./...` passes.
 - `go test ./test/recoverability -run TestResumeAfterProcessKill -count=10` passes with no flakes; the
   SIGKILL harness is verified non-vacuous by mutation (see T044 below).
+- The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
+  verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
   the process-hygiene documents (Principle XI, ADR-0007, ADR-0008), initialized the wiki and memory-md
-  extensions, and completed T044; see `git log` for the exact head.
+  extensions, completed T044, fixed the deferred-transaction lease defect (ADR-0009), and completed T045;
+  see `git log` for the exact head.
 - Toolchain: `go1.27.3 darwin/arm64` on `PATH`; `go.mod` floor is Go 1.26.
 
 ### Done (implemented and covered by a passing test)
@@ -331,6 +334,30 @@ starting the next task. Never batch several tasks into one turn or one commit.
   abandoned-attempt assertions. `harness_test.go` did not change behaviour: `openInstance` now delegates
   to a new error-returning `newInstance`, and `fanoutDefinition` to a new `branchingDefinition`, so the
   child and the parent share one construction path and one definition (DRY, constitution IX).
+- **T045** Ownership and idempotence tests — `test/recoverability/ownership_test.go`, four cases:
+  two instances over one state directory contend for a lease and exactly one wins while the loser
+  gets `ErrRunAlreadyOwned`; resuming a terminal run returns the terminal status, calls no model,
+  and appends no event (FR-018); a resume after the owner's lease lapsed records exactly one
+  `run.taken_over` naming both owners plus a takeover decision (FR-016); and a run whose recorded
+  fingerprint disagrees with its stored snapshot is refused with a hint naming both fingerprints
+  and `--allow-definition-drift`, or, with `engine.ResumeOptions{AllowDefinitionDrift: true}`,
+  proceeds and records exactly one drift-override decision with the fingerprints in its rationale
+  and evidence (FR-014).
+  - **Defect found and fixed**: the two-instance case first failed with `SQLITE_BUSY`, not
+    `ErrRunAlreadyOwned`. The store began transactions deferred, so a read-then-write upgrade on a
+    stale WAL snapshot is refused without consulting `busy_timeout`, turning cross-process lease
+    contention into a raw database-lock error. Fixed by `_txlock=immediate` in
+    `internal/store/sqlite/db.go` (BEGIN IMMEDIATE), pinned by
+    `TestConcurrentAcquireLeaseAcrossConnectionsHasOneWinner` in
+    `internal/store/sqlite/lease_test.go` (fails on the deferred DSN, passes immediate), and
+    recorded in [ADR-0009](../../docs/domain_knowledge/adr/0009-sqlite-immediate-transactions.md).
+    The fix is a store change, not a T045 change, so it lands in its own commit.
+  - **Semantic gap carried forward**: `Engine.Resume` derives the definition to execute from the
+    run's stored snapshot and takes no definition argument, so the drift guard it runs is reachable
+    only when the record is internally inconsistent. The spec's "definition supplied at resume"
+    (data-model.md §10) implies the caller may hand a different definition; T049/T051 must decide
+    whether `ResumeOptions` gains a `Definition`, and the test above will then be extended to that
+    path.
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
@@ -342,14 +369,14 @@ starting the next task. Never batch several tasks into one turn or one commit.
   side-effecting actions are not implemented.
 - **T048** Lease heartbeat — renewal at `leaseTTL/3` in `internal/engine/engine.go` (the drive
   loop) with renewal failure routed through `pauseWithCause`; helpers in `internal/engine/lease.go`.
-  Awaiting T045 coverage of the cadence and the demote-to-paused path.
+  T045 covered the lease's exclusion and takeover but not yet the renewal cadence or the
+  demote-to-paused path.
 - **T049** Definition-drift guard — `internal/engine/drift.go`: refuses a fingerprint mismatch,
-  naming both fingerprints, and records the `--allow-definition-drift` override as a decision.
-  Awaiting T045 coverage.
+  naming both fingerprints, and records the `--allow-definition-drift` override as a decision. Its
+  reachable behaviour is now covered by T045; the "supplied definition" question above remains.
 
 ### Not started
 
-- **T045** Ownership and idempotence tests — `test/recoverability/ownership_test.go` does not exist.
 - **T050** Schema-version handling — `internal/store/sqlite/version.go` does not exist. A
   `CheckRunVersion` currently lives in `internal/store/sqlite/migrate.go`; the task's named file
   and the `state.migrated` / `state.migration_refused` behaviour are not in place.
@@ -384,3 +411,8 @@ starting the next task. Never batch several tasks into one turn or one commit.
   fix it when the scenarios are validated in T068.
 - `internal/engine/reconcile.go` does not yet record `restarted_from` on the restarted attempt
   (see T047 above).
+- `Engine.Resume` takes no definition, so the drift guard compares the stored snapshot against the
+  run's recorded fingerprint and cannot see a workflow the operator edited between start and
+  resume. Decide in T049/T051 whether `ResumeOptions` gains a `Definition` (see T045 above).
+- `AGENTS.md`'s ADR range and `plan.md` line 225 still say `0001–0007`; update them if the range is
+  load-bearing (AGENTS.md was updated to `0001–0009` this session).
