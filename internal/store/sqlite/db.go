@@ -64,8 +64,15 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		}
 	}
 
+	// _txlock=immediate makes every BeginTx issue BEGIN IMMEDIATE, taking the write
+	// lock up front. A deferred transaction would read, then upgrade to a write on a
+	// stale WAL snapshot, which SQLite refuses with SQLITE_BUSY *without* consulting
+	// busy_timeout. Across two processes that turns lease contention into a raw
+	// "database is locked" instead of the contracted ErrRunAlreadyOwned, defeating
+	// the single-writer guarantee the lease exists to provide (ADR-0004, ADR-0009).
 	dsn := "file:" + url.PathEscape(path) +
-		"?_pragma=busy_timeout(5000)" +
+		"?_txlock=immediate" +
+		"&_pragma=busy_timeout(5000)" +
 		"&_pragma=journal_mode(WAL)" +
 		"&_pragma=synchronous(FULL)" +
 		"&_pragma=foreign_keys(ON)"

@@ -205,6 +205,73 @@ func TestTwoStoresOnOneFileSeeOneOwner(t *testing.T) {
 	}
 }
 
+// TestConcurrentAcquireLeaseAcrossConnectionsHasOneWinner is the two-process case:
+// two stores on one database file contend for the same run's lease, as two
+// processes would. Exactly one must win and the other must be told the run is
+// owned, never that the database is locked. A deferred transaction would fail this
+// by returning SQLITE_BUSY on the read-then-write upgrade, so this test pins the
+// BEGIN IMMEDIATE decision in Open (ADR-0004, ADR-0009).
+func TestConcurrentAcquireLeaseAcrossConnectionsHasOneWinner(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "zamnius.db")
+	ctx := context.Background()
+
+	first, err := sqlite.Open(ctx, path)
+	if err != nil {
+		t.Fatalf("open first store: %v", err)
+	}
+	t.Cleanup(func() { _ = first.Close() })
+	run := createRun(t, first, "plan")
+
+	second, err := sqlite.Open(ctx, path)
+	if err != nil {
+		t.Fatalf("open second store: %v", err)
+	}
+	t.Cleanup(func() { _ = second.Close() })
+
+	contenders := []struct {
+		owner string
+		store *sqlite.Store
+	}{
+		{owner: "owner-a", store: first},
+		{owner: "owner-b", store: second},
+	}
+
+	start := make(chan struct{})
+	results := make(chan error, len(contenders))
+	var wg sync.WaitGroup
+	for _, contender := range contenders {
+		contender := contender
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, err := contender.store.AcquireLease(ctx, run.ID, contender.owner, 30*time.Second)
+			results <- err
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+
+	winners, losers := 0, 0
+	for err := range results {
+		switch {
+		case err == nil:
+			winners++
+		case errors.Is(err, domain.ErrRunAlreadyOwned):
+			losers++
+		default:
+			t.Errorf("contender error = %v, want nil or ErrRunAlreadyOwned", err)
+		}
+	}
+	if winners != 1 || losers != 1 {
+		t.Fatalf("winners = %d, losers = %d, want exactly one of each", winners, losers)
+	}
+}
+
 func TestSchemaVersionRefusalForNewerRun(t *testing.T) {
 	t.Parallel()
 
