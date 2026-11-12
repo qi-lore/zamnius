@@ -86,21 +86,23 @@ type fixture struct {
 	runID     uuid.UUID
 }
 
-// openInstance builds an engine over dir, using ids for identifier allocation so a
-// test can predict the run id the engine will assign.
-func openInstance(t *testing.T, dir, owner string, model engine.Model, ids func() uuid.UUID) *fixture {
-	t.Helper()
-
+// newInstance builds an engine over dir, using ids for identifier allocation so a
+// test can predict the run id the engine will assign. It reports its error rather
+// than failing a *testing.T, because the re-executed child process in
+// sigkill_test.go has no *testing.T to fail — and using the same construction path
+// is what makes the process-death test prove the production wiring crosses a real
+// process boundary.
+func newInstance(dir, owner string, model engine.Model, ids func() uuid.UUID) (*fixture, error) {
 	layout := fakes.StateLayout(dir)
 	store, err := sqlite.Open(context.Background(), layout.Database)
 	if err != nil {
-		t.Fatalf("open store: %v", err)
+		return nil, fmt.Errorf("open store: %w", err)
 	}
-	t.Cleanup(func() { _ = store.Close() })
 
 	artifactStore, err := artifactfs.Open(layout.Artifact)
 	if err != nil {
-		t.Fatalf("open artifact store: %v", err)
+		_ = store.Close()
+		return nil, fmt.Errorf("open artifact store: %w", err)
 	}
 
 	eng, err := engine.New(engine.Options{
@@ -114,10 +116,24 @@ func openInstance(t *testing.T, dir, owner string, model engine.Model, ids func(
 		LeaseTTL:  leaseTTL,
 	})
 	if err != nil {
-		t.Fatalf("build engine: %v", err)
+		_ = store.Close()
+		return nil, fmt.Errorf("build engine: %w", err)
 	}
 
-	return &fixture{store: store, artifacts: artifactStore, engine: eng, model: model}
+	return &fixture{store: store, artifacts: artifactStore, engine: eng, model: model}, nil
+}
+
+// openInstance builds an engine over dir for a test, closing the store when the
+// test ends so no scratch state outlives it.
+func openInstance(t *testing.T, dir, owner string, model engine.Model, ids func() uuid.UUID) *fixture {
+	t.Helper()
+
+	f, err := newInstance(dir, owner, model, ids)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	t.Cleanup(func() { _ = f.store.Close() })
+	return f
 }
 
 // twoPhaseDefinition is a workflow whose first phase commits cleanly and whose
@@ -138,11 +154,12 @@ func twoPhaseDefinition(t *testing.T) definition.Definition {
 	return def
 }
 
-// fanoutDefinition is a two-branch fan-out joined by "all".
-func fanoutDefinition(t *testing.T) definition.Definition {
-	t.Helper()
-
-	def, err := definition.NewBuilder("branching").
+// branchingDefinition is the two-branch fan-out joined by "all". It returns its
+// error rather than failing a *testing.T because the re-executed child process in
+// sigkill_test.go has no *testing.T, and because the parent's control run and the
+// child must be built from one definition so their artifacts are comparable.
+func branchingDefinition() (definition.Definition, error) {
+	return definition.NewBuilder("branching").
 		WithFanout("draft",
 			definition.JoinPolicy{Rule: definition.JoinAll},
 			[]definition.Branch{
@@ -151,6 +168,13 @@ func fanoutDefinition(t *testing.T) definition.Definition {
 			},
 			definition.WithOutputs("aggregate")).
 		Build()
+}
+
+// fanoutDefinition is a two-branch fan-out joined by "all".
+func fanoutDefinition(t *testing.T) definition.Definition {
+	t.Helper()
+
+	def, err := branchingDefinition()
 	if err != nil {
 		t.Fatalf("build definition: %v", err)
 	}
