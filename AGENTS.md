@@ -33,11 +33,18 @@ alone (constitution Principle II).
 - Plan, research, data model, contracts, quickstart, and **`tasks.md`** are committed.
 - `tasks.md` holds **68 TDD tasks in six phases**: Setup T001–T005, Foundational T006–T019
   (blocks every story), US1 T020–T042, US2 T043–T053, US3 T054–T062, Polish T063–T068.
-- **The next step is `/speckit.implement`, starting at T001.** Run `/speckit.analyze` first if a
-  cross-artifact consistency check is wanted before code exists.
-- Branch: `001-multi-agent-framework`, 20 commits on top of `main` (which equals `dev`).
-  Per the constitution, feature branches target `dev`, not `main`.
-- No source code exists yet. No commit may claim behaviour that has no test.
+- **Implementation is well under way: T001–T043 are done and tested, so US1 is complete and
+  committed. The next action is to resume US2 at T044.** For the exact per-task state — done,
+  implemented-but-untested, or untouched — and the design decisions taken along the way, read
+  `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
+  boxes above it are updated.
+- Branch: `001-multi-agent-framework`, ~50 commits on top of `dev`. Per the constitution,
+  feature branches target `dev`, not `main`. Working tree is clean; every commit is local.
+- Source now exists: `cmd/zamnius`, `internal/{app,audit,cli,config,definition,domain,engine,fault,model,observability,store}`,
+  `pkg/zamnius`, and tests under `test/{fakes,integration,recoverability,testdata}`. No commit
+  may claim behaviour that has no test.
+- Verification at this checkpoint is green, in order: `go build ./...`, `go vet ./...`,
+  `go test ./... -count=1`, `go test ./... -race -count=1`, `CGO_ENABLED=0 go build ./...`.
 - Keep this section current when a phase completes: it is how a fresh session resumes
   (constitution Principle II.1), so a stale line here is a defect, not a cosmetic issue.
 
@@ -78,7 +85,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.implement # next: execute tasks.md from T001
+/speckit.implement # next: resume US2 at T044 (see tasks.md → Implementation status)
 /speckit.analyze   # cross-artifact consistency check
 ```
 
