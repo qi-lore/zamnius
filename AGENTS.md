@@ -41,8 +41,18 @@ alone (constitution Principle II).
   implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
   boxes above it are updated.
-- Branch: `001-multi-agent-framework`, ~50 commits on top of `dev`. Per the constitution,
-  feature branches target `dev`, not `main`. Working tree is clean; every commit is local.
+- Branch: `001-multi-agent-framework`, 86 commits above the initial commit `0a512c3`. Per the
+  constitution, feature branches target `dev`, not `main`. Working tree is clean; every commit is
+  local.
+- **Ignore files are shared, not branch-local.** `dev` and `main` both derive from the initial
+  commit `0a512c3`. On **2026-11-13** `dev` was advanced by the two ignore commits the feature
+  branch already carried (`fbde31c`, `0878256`), so both branches now hold **byte-identical**
+  `.gitignore` and `.specify/.gitignore`. Because the change is identical on both sides, a
+  `feature → dev` merge is conflict-free on those files — verified with
+  `git merge-tree --write-tree dev 001-multi-agent-framework`, which returns a clean tree. The
+  branches have therefore diverged (the feature branch is no longer a descendant of `dev`), so
+  integration is a real 3-way merge. Add an ignore rule in one place and mirror the exact content;
+  a divergent edit on a single branch is what re-introduces the conflict.
 - Source now exists: `cmd/zamnius`, `internal/{app,audit,cli,config,definition,domain,engine,fault,model,observability,store}`,
   `pkg/zamnius`, and tests under `test/{fakes,integration,recoverability,testdata}`. No commit
   may claim behaviour that has no test.
@@ -70,6 +80,11 @@ alone (constitution Principle II).
    it was verified, then **STOP** and wait for the reviewer's go-ahead before starting the next task. Silence,
    a resumed session, or your own confidence is never approval. Never bundle several tasks into one turn or one
    commit — a human has to be able to review each change (constitution Principle XI; rationale in ADR-0007).
+8. **Shared ignore files.** `.gitignore` and `.specify/.gitignore` are held **byte-identically** by
+   `dev` and every feature branch so integration never conflicts on them. Add a rule in one place
+   and mirror the exact content across branches; never edit an ignore file on a single branch.
+   Machine-local noise (Spec Kit catalog caches, agent work plans, local run state) is already
+   covered — run `git check-ignore -v <path>` before adding anything.
 
 ### Spec Kit
 
