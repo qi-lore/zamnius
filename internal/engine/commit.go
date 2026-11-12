@@ -111,7 +111,10 @@ func (s *session) nextAttemptNo(phase string) int {
 func (s *session) loadPhaseKinds() {
 	s.attemptNo = make(map[string]int, len(s.def.Phases))
 	s.results = make(map[string]PhaseResult, len(s.def.Phases))
+	// The store's spend is what a previous session already committed, so this
+	// session's local accumulator starts from it and its delta is the difference.
 	s.spent = s.run.Spent
+	s.committed = s.run.Spent
 }
 
 // seedAttemptNumbering reads committed attempts so resume continues the sequence.

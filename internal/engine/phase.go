@@ -23,6 +23,11 @@ type phaseOutcome struct {
 	// budget rather than a model failure.
 	BudgetUnit string
 	Join       *domain.JoinResult
+	// Cause is the error that produced the outcome. It is carried so the failure
+	// policy can keep the operator-facing hint (a hint naming the offending
+	// provider or setting is worth more than a generic one) and so a caller can
+	// still match the root error with errors.Is.
+	Cause error
 }
 
 // runPhase dispatches on the declared mode. The two modes share the attempt
@@ -189,7 +194,7 @@ func (s *session) executeAttempts(ctx context.Context, index int, phase definiti
 					})
 				}
 				if err := s.commitAttempt(ctx, attempt, refs, events, nil); err != nil {
-					return phaseOutcome{Status: domain.PhaseFailed, ErrorClass: domain.ErrClassInternal, FailureReason: causeOf(err)}
+					return phaseOutcome{Status: domain.PhaseFailed, ErrorClass: domain.ErrClassInternal, FailureReason: causeOf(err), Cause: err}
 				}
 				s.addSpend(attempt.Usage)
 				recordArtifacts(s.kinds, s.artifacts, phase.Name, refs)
@@ -244,7 +249,7 @@ func (s *session) executeAttempts(ctx context.Context, index int, phase definiti
 				"duration_ms": elapsed,
 			},
 		}}, decisions); err != nil {
-			return phaseOutcome{Status: domain.PhaseFailed, ErrorClass: domain.ErrClassInternal, FailureReason: causeOf(err)}
+			return phaseOutcome{Status: domain.PhaseFailed, ErrorClass: domain.ErrClassInternal, FailureReason: causeOf(err), Cause: err}
 		}
 		s.addSpend(attempt.Usage)
 		if s.observer != nil {
@@ -252,15 +257,15 @@ func (s *session) executeAttempts(ctx context.Context, index int, phase definiti
 		}
 
 		if isContextStop(callErr) {
-			return phaseOutcome{Status: domain.PhaseCancelled, Attempts: attempts, ErrorClass: domain.ErrClassCancelled, FailureReason: detail}
+			return phaseOutcome{Status: domain.PhaseCancelled, Attempts: attempts, ErrorClass: domain.ErrClassCancelled, FailureReason: detail, Cause: callErr}
 		}
 		if !retry {
-			return phaseOutcome{Status: domain.PhaseFailed, Attempts: attempts, ErrorClass: class, FailureReason: detail}
+			return phaseOutcome{Status: domain.PhaseFailed, Attempts: attempts, ErrorClass: class, FailureReason: detail, Cause: callErr}
 		}
 
 		if wait := s.backoffFor(phase, attemptNo+1); wait > 0 {
 			if err := s.engine.sleep(ctx, wait); err != nil {
-				return phaseOutcome{Status: domain.PhaseCancelled, Attempts: attempts, ErrorClass: domain.ErrClassCancelled, FailureReason: causeOf(err)}
+				return phaseOutcome{Status: domain.PhaseCancelled, Attempts: attempts, ErrorClass: domain.ErrClassCancelled, FailureReason: causeOf(err), Cause: err}
 			}
 		}
 	}
@@ -405,10 +410,17 @@ func (s *session) applyFailurePolicy(ctx context.Context, index int, phase defin
 		}
 		s.releaseLease(context.WithoutCancel(ctx))
 
+		// The root cause's hint is more useful than a generic one, so it wins when
+		// present; the cause itself is wrapped so errors.Is still matches it.
+		hint := domain.HintOf(outcome.Cause)
+		if hint == "" {
+			hint = fmt.Sprintf("inspect run %s, then resume after fixing phase %q", s.run.ID, phase.Name)
+		}
 		failure := &domain.Error{
 			Class: outcome.ErrorClass,
 			Msg:   reason,
-			Hint:  fmt.Sprintf("inspect run %s, then resume after fixing phase %q", s.run.ID, phase.Name),
+			Hint:  hint,
+			Err:   outcome.Cause,
 		}
 		result := s.result(failure)
 		result.Status = domain.RunFailed

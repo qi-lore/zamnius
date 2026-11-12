@@ -418,10 +418,11 @@ type session struct {
 	artifacts map[string][]domain.ArtifactRef
 	results   map[string]PhaseResult
 	// spent accumulates this session's consumption; the store receives it as
-	// deltas so two branches cannot erase each other's usage. pending holds the
-	// part not yet written by a committing transaction.
-	spent   domain.Consumption
-	pending domain.Consumption
+	// deltas so two branches cannot erase each other's usage. committed is what the
+	// store has already recorded, so the delta of a phase is the difference and a
+	// second commit cannot count the same tokens twice.
+	spent     domain.Consumption
+	committed domain.Consumption
 }
 
 // drive walks the declared phase order. Order, not concurrency, is the contract

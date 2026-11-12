@@ -141,6 +141,31 @@ func TestRetrySucceedsOnThirdAttempt(t *testing.T) {
 		t.Fatalf("downstream attempts = %d, want exactly 1", len(downstream))
 	}
 
+	// The run's recorded spend must be real: four attempts ran (three flaky plus
+	// one after). The two failed flaky attempts reported no usage — a provider
+	// that fails returns no token counts — so only the two successes contribute
+	// tokens, while all four contribute an attempt and a duration. A run whose
+	// spent counter stayed zero would make every budget decision blind.
+	run, err := h.store.LoadRun(context.Background(), result.RunID)
+	if err != nil {
+		t.Fatalf("LoadRun() error = %v", err)
+	}
+	if run.Spent.Attempts != 4 {
+		t.Errorf("spent attempts = %d, want 4", run.Spent.Attempts)
+	}
+	if run.Spent.TokensIn != 14 || run.Spent.TokensOut != 6 {
+		t.Errorf("spent tokens = %d in / %d out, want 14 in / 6 out (two successful attempts)",
+			run.Spent.TokensIn, run.Spent.TokensOut)
+	}
+	if run.Spent.WallClockMS <= 0 {
+		t.Errorf("spent wall clock = %d, want a positive duration", run.Spent.WallClockMS)
+	}
+	if report, err := h.engine.Status(context.Background(), result.RunID); err != nil {
+		t.Fatalf("Status() error = %v", err)
+	} else if report.Spent != run.Spent {
+		t.Errorf("status spend = %+v, want the committed %+v", report.Spent, run.Spent)
+	}
+
 	// Every retry must be explained, naming the class that triggered it.
 	decisions, err := h.store.Decisions(context.Background(), result.RunID)
 	if err != nil {

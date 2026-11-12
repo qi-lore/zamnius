@@ -60,13 +60,13 @@ func (s *session) stopForBudget(attempts int, unit string) phaseOutcome {
 }
 
 // pendingSpend returns the consumption awaiting its committing transaction and
-// resets the counter, so each phase commit carries exactly its own delta and two
-// branches cannot erase each other's usage.
+// marks it as committed, so each phase commit carries exactly its own delta and
+// two branches cannot erase each other's usage.
 func (s *session) pendingSpend() domain.Consumption {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	pending := s.pending
-	s.pending = domain.Consumption{}
+	pending := s.spent.Sub(s.committed)
+	s.committed = s.spent
 	return pending
 }
 
