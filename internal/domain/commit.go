@@ -42,17 +42,25 @@ type AttemptCommit struct {
 
 // PhaseCommit persists a phase transition, optionally with a run-level delta
 // (for example the run's current position when the phase starts).
+//
+// ExpectedVersion is the run's record_version the caller believes it holds; a
+// non-zero value makes the commit conditional, so a writer that lost ownership
+// fails with ErrStaleRecord instead of overwriting a newer owner's work
+// (contracts/store.md §1.4).
 type PhaseCommit struct {
-	Phase     PhaseState
-	Run       *RunDelta
-	Events    []EventDraft
-	Decisions []DecisionDraft
+	Phase           PhaseState
+	Run             *RunDelta
+	ExpectedVersion int
+	Events          []EventDraft
+	Decisions       []DecisionDraft
 }
 
 // RunCommit persists a run-level transition with its events and decisions.
+// ExpectedVersion guards the run row exactly as in PhaseCommit.
 type RunCommit struct {
-	RunID     uuid.UUID
-	Delta     RunDelta
-	Events    []EventDraft
-	Decisions []DecisionDraft
+	RunID           uuid.UUID
+	Delta           RunDelta
+	ExpectedVersion int
+	Events          []EventDraft
+	Decisions       []DecisionDraft
 }

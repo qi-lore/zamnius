@@ -245,7 +245,7 @@ func upsertAttempt(ctx context.Context, tx *sql.Tx, attempt domain.Attempt) erro
 	return nil
 }
 
-func applyRunDelta(ctx context.Context, tx *sql.Tx, runID uuid.UUID, delta domain.RunDelta, now time.Time) error {
+func applyRunDelta(ctx context.Context, tx *sql.Tx, runID uuid.UUID, expectedVersion int, delta domain.RunDelta, now time.Time) error {
 	// Spent accumulates rather than overwrites: two branches committing usage
 	// concurrently must not erase each other's tokens.
 	current, err := loadConsumption(ctx, tx, runID)
@@ -278,6 +278,12 @@ func applyRunDelta(ctx context.Context, tx *sql.Tx, runID uuid.UUID, delta domai
 	args = append(args, runID.String())
 
 	query := "UPDATE runs SET " + joinComma(sets) + " WHERE id = ?"
+	if expectedVersion > 0 {
+		// The version predicate is what makes the guard optimistic: a stale writer
+		// matches no row and is told to re-read rather than silently overwriting.
+		query += " AND record_version = ?"
+		args = append(args, expectedVersion)
+	}
 	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("apply run delta: %w", err)
@@ -287,7 +293,46 @@ func applyRunDelta(ctx context.Context, tx *sql.Tx, runID uuid.UUID, delta domai
 		return fmt.Errorf("apply run delta: %w", err)
 	}
 	if affected == 0 {
-		return fmt.Errorf("apply run delta for %s: %w", runID, domain.ErrNotFound)
+		return lostWrite(ctx, tx, runID, expectedVersion)
+	}
+	return nil
+}
+
+// lostWrite explains why an update matched no row. A missing run and a stale
+// version are different operator problems, so they must not collapse into one
+// error (FR-052).
+func lostWrite(ctx context.Context, tx *sql.Tx, runID uuid.UUID, expectedVersion int) error {
+	var actual int
+	err := tx.QueryRowContext(ctx, "SELECT record_version FROM runs WHERE id = ?", runID.String()).Scan(&actual)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("commit run %s: %w", runID, domain.ErrNotFound)
+	case err != nil:
+		return fmt.Errorf("read run version: %w", err)
+	default:
+		return fmt.Errorf("commit run %s at record_version %d, stored %d: %w",
+			runID, expectedVersion, actual, domain.ErrStaleRecord)
+	}
+}
+
+// guardRunVersion applies the optimistic guard for a commit that changes only
+// phase rows: the run row still advances so a stale owner is detected.
+func guardRunVersion(ctx context.Context, tx *sql.Tx, runID uuid.UUID, expectedVersion int) error {
+	if expectedVersion <= 0 {
+		return nil
+	}
+	result, err := tx.ExecContext(ctx,
+		"UPDATE runs SET record_version = record_version + 1 WHERE id = ? AND record_version = ?",
+		runID.String(), expectedVersion)
+	if err != nil {
+		return fmt.Errorf("guard run version: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("guard run version: %w", err)
+	}
+	if affected == 0 {
+		return lostWrite(ctx, tx, runID, expectedVersion)
 	}
 	return nil
 }
@@ -485,9 +530,11 @@ func (s *Store) CommitPhaseResult(ctx context.Context, r domain.PhaseCommit) err
 		return fmt.Errorf("commit phase: %w", err)
 	}
 	if r.Run != nil {
-		if err := applyRunDelta(ctx, tx, r.Phase.RunID, *r.Run, now); err != nil {
+		if err := applyRunDelta(ctx, tx, r.Phase.RunID, r.ExpectedVersion, *r.Run, now); err != nil {
 			return fmt.Errorf("commit phase: %w", err)
 		}
+	} else if err := guardRunVersion(ctx, tx, r.Phase.RunID, r.ExpectedVersion); err != nil {
+		return fmt.Errorf("commit phase: %w", err)
 	}
 	if _, err := appendEvents(ctx, tx, r.Phase.RunID, now, r.Events); err != nil {
 		return fmt.Errorf("commit phase: %w", err)
@@ -510,7 +557,7 @@ func (s *Store) CommitRunResult(ctx context.Context, r domain.RunCommit) error {
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().UTC()
-	if err := applyRunDelta(ctx, tx, r.RunID, r.Delta, now); err != nil {
+	if err := applyRunDelta(ctx, tx, r.RunID, r.ExpectedVersion, r.Delta, now); err != nil {
 		return fmt.Errorf("commit run: %w", err)
 	}
 	if _, err := appendEvents(ctx, tx, r.RunID, now, r.Events); err != nil {
