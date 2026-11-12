@@ -122,7 +122,7 @@ Single Go module `github.com/hIMEI29A/zamnius`, per [plan.md](plan.md) §Project
 
 ### Implementation for User Story 2
 
-- [ ] T046 [US2] Implement the resume protocol of [contracts/store.md](contracts/store.md) §5 — load the run, verify `definition_fingerprint` and `schema_version`, acquire the lease, reconcile events after the last committed position, verify the run's event chain, then continue from the current position — in `internal/engine/resume.go`, returning a terminal-or-paused state with a recorded reason on any failure instead of proceeding on partial knowledge
+- [X] T046 [US2] Implement the resume protocol of [contracts/store.md](contracts/store.md) §5 — load the run, verify `definition_fingerprint` and `schema_version`, acquire the lease, reconcile events after the last committed position, verify the run's event chain, then continue from the current position — in `internal/engine/resume.go`, returning a terminal-or-paused state with a recorded reason on any failure instead of proceeding on partial knowledge
 - [ ] T047 [US2] Implement attempt reconciliation — an attempt with no committed outcome is marked `abandoned` with `restarted_from` and a restart cause, restarted from the phase's recorded inputs with a fresh `attempt_no`, a `resume_restart` decision record, and idempotency keys on side-effecting actions so a recorded side effect is never repeated (FR-063, US2 scenario 7) — in `internal/engine/reconcile.go`
 - [ ] T048 [US2] Implement the lease heartbeat — 30s default TTL, renewal at TTL/3, renewal failure demoting the run to `paused` with the cause recorded rather than continuing to write — in `internal/engine/lease.go`
 - [ ] T049 [US2] Implement the definition-drift guard — refuse to resume when the supplied fingerprint differs, name the expected and supplied fingerprints, and record the `--allow-definition-drift` override as a decision, in `internal/engine/drift.go`
@@ -264,3 +264,91 @@ Task: "Lease contention, terminal no-op, drift refusal … test/recoverability/o
 - Commit after each logical group; a source file never lands without its tests.
 - Never push or touch the remote — only the `gitt` agent performs remote operations, on explicit instruction.
 - Any behaviour change goes spec → plan → tasks → code, never code first.
+
+---
+
+## Implementation status (2026-11-12)
+
+Written by the implementing agent mid-`/speckit.implement` so a fresh session can resume from
+the files alone (constitution Principle II.1). The checkboxes above are authoritative for
+"done"; this section records what is genuinely finished, what is implemented but untested, and
+what is untouched. Update it (or fold it into the checkboxes) as phases complete.
+
+### Verified green at this checkpoint
+
+- `go build ./...`, `go vet ./...`, `go test ./... -count=1`, `go test ./... -race -count=1` all pass.
+- `CGO_ENABLED=0 go build ./...` passes.
+- Branch `001-multi-agent-framework`; working tree clean at commit `10579f0` (spend/`--json`
+  details aside, see the log). All commits are local — nothing is pushed.
+- Toolchain: `go1.27.3 darwin/arm64` on `PATH`; `go.mod` floor is Go 1.26.
+
+### Done (implemented and covered by a passing test)
+
+- **T001–T005** Setup; **T006–T019** Foundational; **T020–T042** US1 — all committed.
+- **T043** Fault-injection resume suite — `test/recoverability/resume_test.go` plus the shared
+  `test/recoverability/harness_test.go`. It arms each of the four points (before/after artifact
+  rename, before/after commit) through `internal/fault`, then resumes on a fresh instance and
+  asserts: the resume completes, artifacts are byte-identical to the control run, completed work
+  is not re-executed, an `attempt.abandoned` names the interrupted attempt, a `resume_restart`
+  decision states the cause, and no `sha256` is committed twice for one attempt. It also carries
+  a fan-out resume case (a finished branch is reused, the unfinished one runs, the join completes).
+- **T046** Resume protocol — `internal/engine/resume.go`: loads the run, checks the schema
+  version, refuses definition drift, takes the lease, verifies the event chain
+  (`audit.VerifyChain`), reconciles attempts, then drives from the current position. Exercised
+  end-to-end by the T043 suite.
+  - **Residual coverage gap**: the failure paths — `failOnIntegrity` on a broken chain, and the
+    pause-with-recorded-reason path — are not yet asserted by a dedicated test. T057/T059 must cover them.
+
+### Implemented but NOT yet covered by a dedicated test (left unchecked)
+
+- **T047** Attempt reconciliation — `internal/engine/reconcile.go`. A `running` attempt with no
+  committed outcome is marked `abandoned`, an `attempt.abandoned` event and a `resume_restart`
+  decision are recorded, and a succeeded attempt is reused (`session.recordRecovered` /
+  `session.recoveredBranch`). **Gaps before it can be marked done**: the restarted attempt does
+  not yet carry `restarted_from` (data-model §4 invariant 2), and idempotency keys on
+  side-effecting actions are not implemented.
+- **T048** Lease heartbeat — renewal at `leaseTTL/3` in `internal/engine/engine.go` (the drive
+  loop) with renewal failure routed through `pauseWithCause`; helpers in `internal/engine/lease.go`.
+  Awaiting T045 coverage of the cadence and the demote-to-paused path.
+- **T049** Definition-drift guard — `internal/engine/drift.go`: refuses a fingerprint mismatch,
+  naming both fingerprints, and records the `--allow-definition-drift` override as a decision.
+  Awaiting T045 coverage.
+
+### Not started
+
+- **T044** SIGKILL re-exec harness — `test/recoverability/sigkill_test.go` does not exist.
+- **T045** Ownership and idempotence tests — `test/recoverability/ownership_test.go` does not exist.
+- **T050** Schema-version handling — `internal/store/sqlite/version.go` does not exist. A
+  `CheckRunVersion` currently lives in `internal/store/sqlite/migrate.go`; the task's named file
+  and the `state.migrated` / `state.migration_refused` behaviour are not in place.
+- **T051** `run resume` command — implemented as `runner.runResume` in `internal/cli/run.go`
+  (exit 4 via `ErrRunAlreadyOwned`, terminal no-op via `alreadyComplete`, drift passthrough, the
+  same JSON envelope). The task requires it in `internal/cli/resume.go`; the file move and its
+  golden tests are pending.
+- **T052** Signal handling — `cmd/zamnius/main.go` passes `context.Background()`; no
+  SIGINT/SIGTERM binding yet.
+- **T053** Pause/resume persistence — `run.paused` is emitted from the engine cancel path
+  (`internal/engine/cancel.go`) and `run.resumed` from `internal/engine/resume.go`. The task's
+  named file `internal/store/sqlite/pause.go` and the explicit `Status` fields are not in place.
+- **T054–T062** US3 — untouched; only `internal/audit/verify.go` exists under `internal/audit`.
+- **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
+  `CHANGELOG.md` does not exist.
+
+### Design decisions made while implementing (not yet written as ADRs)
+
+- The fan-out aggregate (`persistAggregate`, `internal/engine/join.go`) projects branch outcomes
+  **without** `attempt_no` (the local `branchSummary` type), so the `aggregate` artifact is
+  byte-identical across a resume even when a branch restarts. The `join_result` record stored in
+  the phase row keeps the full `domain.BranchOutcome`, `attempt_no` included.
+  `domain.BranchOutcome.Artifacts` was replaced by `Digests []string` for the same reason.
+- The `internal/store/sqlite` commit paths hit `fault.BeforeCommit` / `fault.AfterCommit` around
+  each transaction, so the recoverability suite can crash exactly at a transaction boundary.
+- `internal/store/sqlite` artifacts use `sha256` as a `UNIQUE` key with `ON CONFLICT DO NOTHING`;
+  identical content dedupes to one row, so per-branch test content is made distinct deliberately.
+
+### Known open defects to carry forward
+
+- `quickstart.md` scenario 1 runs `ls /tmp/zq1/runs`, which does not match the real state layout;
+  fix it when the scenarios are validated in T068.
+- `internal/engine/reconcile.go` does not yet record `restarted_from` on the restarted attempt
+  (see T047 above).
