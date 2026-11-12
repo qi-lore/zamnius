@@ -21,7 +21,7 @@ data model    specs/001-multi-agent-framework/data-model.md entities, states, in
 contracts     specs/001-multi-agent-framework/contracts/    schemas and interfaces
 validation    specs/001-multi-agent-framework/quickstart.md runnable scenarios per story
 glossary      docs/domain_knowledge/CONTEXT.md              canonical vocabulary
-decisions     docs/domain_knowledge/adr/0001–0007           architectural rationale
+decisions     docs/domain_knowledge/adr/0001–0009           architectural rationale
 ```
 
 Chat history is never the source of truth. A fresh agent must be able to resume from these files
@@ -33,9 +33,10 @@ alone (constitution Principle II).
 - Plan, research, data model, contracts, quickstart, and **`tasks.md`** are committed.
 - `tasks.md` holds **68 TDD tasks in six phases**: Setup T001–T005, Foundational T006–T019
   (blocks every story), US1 T020–T042, US2 T043–T053, US3 T054–T062, Polish T063–T068.
-- **Implementation is well under way: T001–T044 are done and tested, so US1 is complete, US2's
-  genuine-process-death proof is in place, and T043/T044/T046 are all committed. The next action is to
-  resume US2 at T045** (ownership and idempotence tests). For the exact per-task state — done,
+- **Implementation is well under way: T001–T046 are done and tested, so US1 is complete, US2's
+  genuine-process-death and ownership/idempotence proofs are in place, and T043–T046 are all
+  committed. The next action is to resume US2 at T047** (attempt reconciliation: add
+  `restarted_from` and idempotency keys). For the exact per-task state — done,
   implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
   boxes above it are updated.
@@ -104,7 +105,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.implement # implement the NEXT single unchecked task (now T045), verify it, then STOP and report for review
+/speckit.implement # implement the NEXT single unchecked task (now T047), verify it, then STOP and report for review
 /speckit.analyze   # cross-artifact consistency check
 ```
 
