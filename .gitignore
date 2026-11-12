@@ -54,3 +54,6 @@ notes/
 /zamnius
 /bin/
 /test/.state/
+
+# Local agent work plans (working docs, not durable knowledge)
+.opencode/plan/
