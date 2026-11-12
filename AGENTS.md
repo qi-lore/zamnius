@@ -21,7 +21,7 @@ data model    specs/001-multi-agent-framework/data-model.md entities, states, in
 contracts     specs/001-multi-agent-framework/contracts/    schemas and interfaces
 validation    specs/001-multi-agent-framework/quickstart.md runnable scenarios per story
 glossary      docs/domain_knowledge/CONTEXT.md              canonical vocabulary
-decisions     docs/domain_knowledge/adr/0001–0006           architectural rationale
+decisions     docs/domain_knowledge/adr/0001–0007           architectural rationale
 ```
 
 Chat history is never the source of truth. A fresh agent must be able to resume from these files
@@ -61,6 +61,12 @@ alone (constitution Principle II).
 5. **Never weaken recoverability** for convenience. Attempt-level atomicity (ADR-0003) and the
    single-host lease (ADR-0004) are load-bearing; changes there need a new ADR.
 6. **Fix the artifact, not the chat.** If behaviour must change, update spec → plan → tasks → code.
+7. **One task at a time, then stop for review.** Work proceeds in `tasks.md` order, one numbered task per turn
+   (`T047` — not a phase, not a story, not a batch). When a task is done: run its tests plus `go build ./...`
+   and `go vet ./...`, set its checkbox, update `## Implementation status`, report what changed, where, and how
+   it was verified, then **STOP** and wait for the reviewer's go-ahead before starting the next task. Silence,
+   a resumed session, or your own confidence is never approval. Never bundle several tasks into one turn or one
+   commit — a human has to be able to review each change (constitution Principle XI; rationale in ADR-0007).
 
 ## Environment
 
@@ -85,7 +91,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.implement # next: resume US2 at T044 (see tasks.md → Implementation status)
+/speckit.implement # implement the NEXT single unchecked task, verify it, then STOP and report for review
 /speckit.analyze   # cross-artifact consistency check
 ```
 
