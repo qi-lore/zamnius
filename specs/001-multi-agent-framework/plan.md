@@ -239,6 +239,18 @@ Roles, task board, messaging, memory (short/long term, RAG, semantic cache, vect
 registry, MCP, git/worktree tools, prompts management UI/versioning beyond recording the version used,
 HTTP, gRPC, A2A, AG-UI, streaming, embeddings, packaging/containers, backups and archival.
 
+### Deferred decisions
+
+Naming a deferred surface is not choosing its mechanism; each item above leaves its implementation
+open until the increment that delivers it is planned.
+
+The clearest case is **agent messaging** (FR-028, story 4). Its transport is undecided and remains a
+decision for the collaboration increment. Candidates to evaluate then include a brokered protocol
+such as **NATS** (with JetStream for durable, at-least-once delivery), in-process delivery, HTTP/gRPC,
+and the A2A protocol. The binding constraint is FR-028 itself — addressing, per-pair ordering, and
+exactly-once observation by the recipient under retries — not the transport; the choice is made
+against that constraint when the increment is planned.
+
 ## Completion Criteria for This Plan
 
 - [x] Technical Context has no unresolved clarification
