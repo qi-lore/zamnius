@@ -68,6 +68,18 @@ alone (constitution Principle II).
    a resumed session, or your own confidence is never approval. Never bundle several tasks into one turn or one
    commit — a human has to be able to review each change (constitution Principle XI; rationale in ADR-0007).
 
+### Spec Kit
+
+You MUST follow the memory-first workflow defined in
+[`.specify/memory/workflow.md`](.specify/memory/workflow.md). Before planning, prepare context using the best
+available path: MCP tools if configured, or `/speckit.memory-md.prepare-context` if Spec Kit commands are
+available.
+
+Project precedence: the constitution and [ADR-0008](docs/domain_knowledge/adr/0008-one-canonical-knowledge-layer.md)
+come first. Durable memory (`docs/memory/`) and the wiki (`wiki/`) are **derived views** — no memory entry may
+override the constitution, a feature artifact, `CONTEXT.md`, or an ADR. These memory steps are never
+auto-executed; agreement 7 still governs.
+
 ## Environment
 
 - Go: `go1.27.3 darwin/arm64` at `/Users/aiagent/.local/go/bin/go` (on `PATH`, `GOTOOLCHAIN=auto`).
