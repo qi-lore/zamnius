@@ -147,15 +147,18 @@ type RunResult struct {
 
 // Status is the on-demand position report; nothing here is stored twice.
 type Status struct {
-	RunID          uuid.UUID           `json:"run_id"`
-	Status         domain.RunStatus    `json:"status"`
-	CurrentPhase   *string             `json:"current_phase,omitempty"`
-	Phases         []domain.PhaseState `json:"phases"`
-	Budget         domain.Budget       `json:"budget"`
-	Spent          domain.Consumption  `json:"spent"`
-	LeaseExpiresAt *time.Time          `json:"lease_expires_at,omitempty"`
-	NextAction     string              `json:"next_action"`
-	LastEvents     []domain.Event      `json:"last_events,omitempty"`
+	RunID        uuid.UUID           `json:"run_id"`
+	Status       domain.RunStatus    `json:"status"`
+	CurrentPhase *string             `json:"current_phase,omitempty"`
+	Phases       []domain.PhaseState `json:"phases"`
+	Budget       domain.Budget       `json:"budget"`
+	Spent        domain.Consumption  `json:"spent"`
+	// OwnerID and LeaseExpiresAt are what explain a refused resume: they name the
+	// process holding the run and when its claim lapses (contracts/cli.md §1).
+	OwnerID        *string        `json:"owner_id,omitempty"`
+	LeaseExpiresAt *time.Time     `json:"lease_expires_at,omitempty"`
+	NextAction     string         `json:"next_action"`
+	LastEvents     []domain.Event `json:"last_events,omitempty"`
 }
 
 // New builds an engine. Missing dependencies are refused rather than defaulted:
@@ -323,6 +326,7 @@ func (e *Engine) Status(ctx context.Context, runID uuid.UUID) (Status, error) {
 		Phases:         phases,
 		Budget:         run.Budget,
 		Spent:          run.Spent,
+		OwnerID:        run.OwnerID,
 		LeaseExpiresAt: run.LeaseExpiresAt,
 		NextAction:     nextAction(run, phases),
 	}
