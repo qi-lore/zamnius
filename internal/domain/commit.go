@@ -51,8 +51,11 @@ type PhaseCommit struct {
 	Phase           PhaseState
 	Run             *RunDelta
 	ExpectedVersion int
-	Events          []EventDraft
-	Decisions       []DecisionDraft
+	// Artifacts are phase-level rows produced by the transition itself, such as a
+	// fan-out aggregate. Attempt-owned artifacts travel with the attempt instead.
+	Artifacts []ArtifactRef
+	Events    []EventDraft
+	Decisions []DecisionDraft
 }
 
 // RunCommit persists a run-level transition with its events and decisions.

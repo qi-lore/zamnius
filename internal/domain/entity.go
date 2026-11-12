@@ -48,12 +48,40 @@ func NewDuration(d time.Duration) Duration { return Duration{d: d} }
 // Duration returns the underlying value.
 func (d Duration) Duration() time.Duration { return d.d }
 
-// String renders the value the way it is written in a workflow definition.
-func (d Duration) String() string { return d.d.String() }
+// String renders the value in the restricted single-unit syntax, choosing the
+// largest unit that divides exactly. time.Duration.String would emit "5m0s" for
+// five minutes, which the definition syntax forbids and which would make a parsed
+// definition fail its own fingerprint round-trip.
+func (d Duration) String() string {
+	switch {
+	case d.d%time.Hour == 0:
+		return fmt.Sprintf("%dh", d.d/time.Hour)
+	case d.d%time.Minute == 0:
+		return fmt.Sprintf("%dm", d.d/time.Minute)
+	case d.d%time.Second == 0:
+		return fmt.Sprintf("%ds", d.d/time.Second)
+	default:
+		return fmt.Sprintf("%dms", d.d/time.Millisecond)
+	}
+}
 
-// MarshalJSON writes the value as a quoted Go duration.
+// MarshalText lets YAML and TOML encoders emit the same syntax as JSON.
+func (d Duration) MarshalText() ([]byte, error) { return []byte(d.String()), nil }
+
+// UnmarshalText lets YAML and TOML decoders apply the same restricted syntax as
+// JSON, so all three formats accept exactly the same documents.
+func (d *Duration) UnmarshalText(text []byte) error {
+	parsed, err := ParseDuration(string(text))
+	if err != nil {
+		return err
+	}
+	*d = parsed
+	return nil
+}
+
+// MarshalJSON writes the value as a quoted duration string.
 func (d Duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.d.String())
+	return json.Marshal(d.String())
 }
 
 // UnmarshalJSON accepts only the restricted single-unit syntax.
