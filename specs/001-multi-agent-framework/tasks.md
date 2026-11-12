@@ -130,7 +130,7 @@ Single Go module `github.com/hIMEI29A/zamnius`, per [plan.md](plan.md) §Project
 
 - [X] T046 [US2] Implement the resume protocol of [contracts/store.md](contracts/store.md) §5 — load the run, verify `definition_fingerprint` and `schema_version`, acquire the lease, reconcile events after the last committed position, verify the run's event chain, then continue from the current position — in `internal/engine/resume.go`, returning a terminal-or-paused state with a recorded reason on any failure instead of proceeding on partial knowledge
 - [X] T047 [US2] Implement attempt reconciliation — an attempt with no committed outcome is marked `abandoned` with `restarted_from` and a restart cause, restarted from the phase's recorded inputs with a fresh `attempt_no`, a `resume_restart` decision record, and idempotency keys on side-effecting actions so a recorded side effect is never repeated (FR-063, US2 scenario 7) — in `internal/engine/reconcile.go`
-- [ ] T048 [US2] Implement the lease heartbeat — 30s default TTL, renewal at TTL/3, renewal failure demoting the run to `paused` with the cause recorded rather than continuing to write — in `internal/engine/lease.go`
+- [X] T048 [US2] Implement the lease heartbeat — 30s default TTL, renewal at TTL/3, renewal failure demoting the run to `paused` with the cause recorded rather than continuing to write — in `internal/engine/lease.go`
 - [ ] T049 [US2] Implement the definition-drift guard — refuse to resume when the supplied fingerprint differs, name the expected and supplied fingerprints, and record the `--allow-definition-drift` override as a decision, in `internal/engine/drift.go`
 - [ ] T050 [US2] Implement schema version handling — a newer binary resuming older state either runs a recorded migration writing `state.migrated`, or refuses with `state.migration_refused` and an actionable message; never a best-effort interpretation (FR-017) — in `internal/store/sqlite/version.go`
 - [ ] T051 [US2] Implement the `run resume` command — resuming `paused`/`pending`/runs with an expired lease, exit `4` naming the live owner and lease expiry, exit `0` with "already complete" and no work for a terminal run, `--allow-definition-drift` passthrough, and the same JSON envelope — in `internal/cli/resume.go`, wired from `internal/cli/cli.go`
@@ -298,8 +298,8 @@ starting the next task. Never batch several tasks into one turn or one commit.
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
   the process-hygiene documents (Principle XI, ADR-0007, ADR-0008), initialized the wiki and memory-md
-  extensions, completed T044, fixed the deferred-transaction lease defect (ADR-0009), and completed T045
-  and T047; see `git log` for the exact head.
+  extensions, completed T044, fixed the deferred-transaction lease defect (ADR-0009), and completed T045,
+  T047, and T048; see `git log` for the exact head.
 - Toolchain: `go1.27.3 darwin/arm64` on `PATH`; `go.mod` floor is Go 1.26.
 
 ### Done (implemented and covered by a passing test)
@@ -380,13 +380,29 @@ starting the next task. Never batch several tasks into one turn or one commit.
   - **Non-vacuousness by mutation**: removing the `RestartedFrom: s.takeRestartSource(...)` wiring
     fails both `restarted_from` tests; making the artifact body depend on the attempt id (a
     non-idempotent side effect) fails the content-key test with the digest recorded 0 times.
+- **T048** Lease heartbeat — `test/recoverability/heartbeat_test.go`, two cases:
+  - **Renewal happens while a phase runs** — one phase spends several renewal intervals inside a
+    single model call; the lease is renewed more than once during it, proving the heartbeat, not a
+    phase boundary, keeps ownership alive (ADR-0004).
+  - **A failed renewal pauses the run** — a renewal that fails (`ErrRunAlreadyOwned`) demotes the run
+    to `paused`, the durable status is `paused`, and the `run.paused` reason names the lease failure
+    rather than a generic cancellation, so an operator can tell it apart from a caller cancellation
+    (FR-008, FR-016).
+  - **Implementation**: `internal/engine/lease.go` gains `startHeartbeat`/`heartbeat` (a goroutine
+    renewing at `leaseTTL/3` via a real ticker), `currentLease`/`setLease` (guarding `session.lease`
+    under `leaseMu`), and `recordLeaseLoss`/`leaseLossCause`. The heartbeat is the sole renewer, so
+    the old phase-boundary renewal in `drive` was removed. A renewal failure records the cause and
+    cancels the run context; `pause` and the success path in `drive` consult `leaseLossCause` so the
+    recorded reason is the lease failure. `releaseLease` stops the heartbeat before releasing, so a
+    renewal can never race the release. The store decorator seam (`newInstanceWith`) lets a test
+    observe or force a renewal without changing production wiring. Dead helper `leaseTTLForReports`
+    removed.
+  - **Non-vacuousness by mutation**: making the heartbeat body a no-op fails the cadence test
+    (renewed 0 times) and times out the failure test; removing the `recordLeaseLoss`/`cancel` on a
+    failed renewal times out the failure test.
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-- **T048** Lease heartbeat — renewal at `leaseTTL/3` in `internal/engine/engine.go` (the drive
-  loop) with renewal failure routed through `pauseWithCause`; helpers in `internal/engine/lease.go`.
-  T045 covered the lease's exclusion and takeover but not yet the renewal cadence or the
-  demote-to-paused path.
 - **T049** Definition-drift guard — `internal/engine/drift.go`: refuses a fingerprint mismatch,
   naming both fingerprints, and records the `--allow-definition-drift` override as a decision. Its
   reachable behaviour is now covered by T045; the "supplied definition" question above remains.
