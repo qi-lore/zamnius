@@ -421,6 +421,11 @@ type session struct {
 	// had already succeeded before the interruption. A resumed run reuses it rather
 	// than recomputing, so a completed step is never re-executed (FR-013, SC-002).
 	recovered map[string]map[string]recoveredAttempt
+	// restartFrom holds, per phase and agent, the attempt that reconciliation found
+	// without a committed outcome. The next attempt of that agent claims it as
+	// restarted_from, so a restart names the attempt it replaced (data-model.md §4
+	// invariant 2).
+	restartFrom map[string]map[string]uuid.UUID
 	// kinds records the artifact kinds produced per phase, which the outputs
 	// invariant checks before a phase may succeed.
 	kinds     map[string]map[string]struct{}

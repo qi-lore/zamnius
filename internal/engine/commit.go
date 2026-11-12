@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/hIMEI29A/zamnius/internal/definition"
 	"github.com/hIMEI29A/zamnius/internal/domain"
 )
@@ -111,6 +113,7 @@ func (s *session) nextAttemptNo(phase string) int {
 func (s *session) loadPhaseKinds() {
 	s.attemptNo = make(map[string]int, len(s.def.Phases))
 	s.results = make(map[string]PhaseResult, len(s.def.Phases))
+	s.restartFrom = make(map[string]map[string]uuid.UUID, len(s.def.Phases))
 	// The store's spend is what a previous session already committed, so this
 	// session's local accumulator starts from it and its delta is the difference.
 	s.spent = s.run.Spent
@@ -193,6 +196,38 @@ func (s *session) recoveredBranch(phase, agent string) (recoveredAttempt, bool) 
 	}
 	recovered, ok := byAgent[agent]
 	return recovered, ok
+}
+
+// recordRestartSource notes, for a phase and agent, the attempt that has no
+// committed outcome and must therefore be replaced. Reconciliation sets this; the
+// next attempt of that agent claims it as restarted_from.
+func (s *session) recordRestartSource(phase, agent string, attemptID uuid.UUID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.restartFrom[phase] == nil {
+		s.restartFrom[phase] = make(map[string]uuid.UUID)
+	}
+	s.restartFrom[phase][agent] = attemptID
+}
+
+// takeRestartSource returns and clears the restart source for an agent. Because it
+// clears, only the attempt that directly replaces an interrupted one records
+// restarted_from: a retry of that replacement is a retry, not a restart.
+func (s *session) takeRestartSource(phase, agent string) *uuid.UUID {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	byAgent, ok := s.restartFrom[phase]
+	if !ok {
+		return nil
+	}
+	attemptID, ok := byAgent[agent]
+	if !ok {
+		return nil
+	}
+	delete(byAgent, agent)
+	return &attemptID
 }
 
 // missingOutputs reports the declared output kinds a phase has not committed an

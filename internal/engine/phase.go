@@ -142,6 +142,10 @@ func (s *session) executeAttempts(ctx context.Context, index int, phase definiti
 			InputFingerprint: fingerprint,
 			PromptVersion:    promptVersion,
 			StartedAt:        s.engine.now(),
+			// A resumed run that found this agent's prior attempt without a committed
+			// outcome links the replacement to it. takeRestartSource clears the entry,
+			// so a retry of this attempt does not claim the same restart.
+			RestartedFrom: s.takeRestartSource(phase.Name, agent.Name),
 		}
 		// The attempt boundary is durable: a start is recorded even if the caller is
 		// cancelled while the provider is being called, so the next session can see

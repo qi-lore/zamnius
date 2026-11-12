@@ -11,7 +11,8 @@ import (
 
 // reconcileAttempts repairs the two states a crash can leave behind. An attempt
 // that started and never committed an outcome is marked abandoned with the restart
-// cause recorded. An attempt that did commit a success is remembered, so the run
+// cause recorded, and the attempt that replaces it is linked back through
+// restarted_from. An attempt that did commit a success is remembered, so the run
 // reuses its result instead of executing the step again (data-model.md §4
 // invariant 2, FR-013, FR-063).
 func (s *session) reconcileAttempts(ctx context.Context, events []domain.Event) error {
@@ -20,8 +21,20 @@ func (s *session) reconcileAttempts(ctx context.Context, events []domain.Event) 
 		if err != nil {
 			return err
 		}
+
+		// latest is the highest-numbered attempt of each agent, and succeeded marks
+		// agents whose work is already committed. Only the latest attempt can be the
+		// one a resume restarts: an agent with a committed attempt is reused, and a
+		// failed attempt is a normal retry rather than a crash restart.
+		latest := make(map[string]domain.Attempt, len(attempts))
+		succeeded := make(map[string]bool, len(attempts))
+
 		for _, attempt := range attempts {
+			if current, ok := latest[attempt.AgentName]; !ok || attempt.AttemptNo > current.AttemptNo {
+				latest[attempt.AgentName] = attempt
+			}
 			if attempt.Status == domain.AttemptSucceeded {
+				succeeded[attempt.AgentName] = true
 				s.recordRecovered(phase.Name, attempt)
 				continue
 			}
@@ -65,6 +78,19 @@ func (s *session) reconcileAttempts(ctx context.Context, events []domain.Event) 
 			}
 			s.engine.logger.Warn("reconciled an interrupted attempt",
 				"run_id", s.run.ID.String(), "phase", phase.Name, "attempt_no", attempt.AttemptNo)
+		}
+
+		// The attempt a resume will replace is the latest one of an agent that has no
+		// committed outcome: either it was running (just marked abandoned above) or it
+		// was already abandoned when the owner paused. The replacement claims it as
+		// restarted_from, so the two rows are linked (data-model.md §4 invariant 2).
+		for agent, attempt := range latest {
+			if succeeded[agent] {
+				continue
+			}
+			if attempt.Status == domain.AttemptRunning || attempt.Status == domain.AttemptAbandoned {
+				s.recordRestartSource(phase.Name, agent, attempt.ID)
+			}
 		}
 	}
 	return nil
