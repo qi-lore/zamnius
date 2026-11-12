@@ -19,6 +19,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/hIMEI29A/zamnius/internal/domain"
+
 	// Pure-Go driver: no cgo, so the reference build cross-compiles and the
 	// offline test suite works without a C toolchain (research.md R2).
 	_ "modernc.org/sqlite"
@@ -27,9 +29,9 @@ import (
 // timelayout is fixed width on purpose. Lease expiry is compared as text, so a
 // variable-width RFC3339 encoding would order incorrectly between values with
 // and without fractional seconds ("...00Z" sorts after "...00.5Z").
-const timeLayout = "2006-01-02T15:04:05.000000000Z"
+const timeLayout = domain.TimestampLayout
 
-func formatTime(t time.Time) string { return t.UTC().Format(timeLayout) }
+func formatTime(t time.Time) string { return domain.FormatTimestamp(t) }
 
 func parseTime(s string) (time.Time, error) {
 	parsed, err := time.Parse(timeLayout, s)

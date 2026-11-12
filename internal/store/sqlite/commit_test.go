@@ -331,6 +331,79 @@ func TestCommitPhaseResultAppliesRunDelta(t *testing.T) {
 	}
 }
 
+// TestCommitPhaseResultRecordsPhaseLevelArtifacts pins the row the engine relies
+// on for a fan-out aggregate: an artifact owned by the phase rather than by an
+// attempt, committed in the same transaction as the phase transition.
+func TestCommitPhaseResultRecordsPhaseLevelArtifacts(t *testing.T) {
+	t.Parallel()
+
+	store := newStore(t)
+	ctx := context.Background()
+	run := createRun(t, store, "review")
+
+	phases, err := store.Phases(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("Phases() error = %v", err)
+	}
+	phase := phases[0]
+	phase.Status = domain.PhaseSucceeded
+	ended := nowUTC()
+	phase.StartedAt = &ended
+	phase.EndedAt = &ended
+
+	aggregate := domain.ArtifactRef{
+		ID:           uuid.New(),
+		SHA256:       domain.HashBytes([]byte(`{"branches":["alpha","beta"]}`)),
+		RunID:        run.ID,
+		Phase:        "review",
+		AttemptID:    nil,
+		Kind:         "aggregate",
+		MediaType:    "application/json",
+		SizeBytes:    28,
+		RelativePath: "artifacts/ab/aggregate",
+		CreatedAt:    ended,
+	}
+
+	if err := store.CommitPhaseResult(ctx, domain.PhaseCommit{
+		Phase:           phase,
+		ExpectedVersion: run.RecordVersion,
+		Artifacts:       []domain.ArtifactRef{aggregate},
+		Events:          []domain.EventDraft{{Type: domain.EventPhaseSucceeded, Actor: domain.ActorSystem, Phase: "review"}},
+	}); err != nil {
+		t.Fatalf("CommitPhaseResult() error = %v", err)
+	}
+
+	refs, err := store.Artifacts(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("Artifacts() error = %v", err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("artifacts = %+v, want the one aggregate row", refs)
+	}
+	if refs[0].SHA256 != aggregate.SHA256 || refs[0].Kind != "aggregate" {
+		t.Errorf("stored artifact = %+v, want the aggregate", refs[0])
+	}
+	if refs[0].AttemptID != nil {
+		t.Errorf("aggregate attempt_id = %v, want NULL for a phase-level artifact", refs[0].AttemptID)
+	}
+
+	// Committing the same digest again is a no-op: content is write-once and
+	// addressed by hash, so a retry of the aggregate cannot duplicate the row.
+	if err := store.CommitPhaseResult(ctx, domain.PhaseCommit{
+		Phase:     phase,
+		Artifacts: []domain.ArtifactRef{aggregate},
+	}); err != nil {
+		t.Fatalf("second CommitPhaseResult() error = %v", err)
+	}
+	refs, err = store.Artifacts(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("Artifacts() error = %v", err)
+	}
+	if len(refs) != 1 {
+		t.Errorf("artifacts = %d, want 1 after re-committing the same digest", len(refs))
+	}
+}
+
 func TestCommitRunResultAccumulatesSpend(t *testing.T) {
 	t.Parallel()
 
