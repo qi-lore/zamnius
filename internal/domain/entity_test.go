@@ -28,6 +28,30 @@ func TestConsumptionAddAndTokens(t *testing.T) {
 	}
 }
 
+// TestConsumptionSubYieldsTheDeltaToCommit pins the arithmetic a writer needs:
+// the store accumulates deltas, so what a session commits is what it spent beyond
+// what it already recorded.
+func TestConsumptionSubYieldsTheDeltaToCommit(t *testing.T) {
+	t.Parallel()
+
+	total := domain.Consumption{Attempts: 3, WallClockMS: 40, TokensIn: 30, TokensOut: 12}
+	committed := domain.Consumption{Attempts: 1, WallClockMS: 10, TokensIn: 20, TokensOut: 2}
+
+	delta := total.Sub(committed)
+	want := domain.Consumption{Attempts: 2, WallClockMS: 30, TokensIn: 10, TokensOut: 10}
+	if delta != want {
+		t.Errorf("Sub() = %+v, want %+v", delta, want)
+	}
+
+	// Nothing spent since the last commit is a zero delta, never a negative one.
+	if got := total.Sub(total); got != (domain.Consumption{}) {
+		t.Errorf("Sub(same) = %+v, want the zero consumption", got)
+	}
+	if got := committed.Sub(total); got != (domain.Consumption{}) {
+		t.Errorf("Sub(larger) = %+v, want every field floored at zero", got)
+	}
+}
+
 func TestParseDurationStrictSingleUnit(t *testing.T) {
 	t.Parallel()
 

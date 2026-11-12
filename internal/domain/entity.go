@@ -31,6 +31,34 @@ func (c Consumption) Add(other Consumption) Consumption {
 	}
 }
 
+// Sub returns the consumption c has beyond other. It is how a writer derives the
+// delta to record after accumulating locally: the store accumulates deltas, so
+// committing an absolute total twice would double-count it. Fields that would go
+// negative are floored at zero, because a negative delta can only mean the total
+// was reset (a reload from the store), never real spend.
+func (c Consumption) Sub(other Consumption) Consumption {
+	return Consumption{
+		Attempts:    floorZero(c.Attempts - other.Attempts),
+		WallClockMS: floorZero64(c.WallClockMS - other.WallClockMS),
+		TokensIn:    floorZero(c.TokensIn - other.TokensIn),
+		TokensOut:   floorZero(c.TokensOut - other.TokensOut),
+	}
+}
+
+func floorZero(value int) int {
+	if value < 0 {
+		return 0
+	}
+	return value
+}
+
+func floorZero64(value int64) int64 {
+	if value < 0 {
+		return 0
+	}
+	return value
+}
+
 // Tokens is the total token consumption, the unit the token budget is expressed in.
 func (c Consumption) Tokens() int { return c.TokensIn + c.TokensOut }
 
