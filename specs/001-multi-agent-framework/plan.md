@@ -21,11 +21,18 @@ uncommitted attempt from recorded inputs with idempotent side effects.
 
 **Language/Version**: Go 1.26 minimum in `go.mod` (raised from 1.25 on 2026-11-12 because `modernc.org/sqlite v1.62.0` declares `go 1.26.0`; see [research.md](research.md) R1); development toolchain verified on this host as **go1.27.3 darwin/arm64** (`/Users/aiagent/.local/go/bin/go`); CI targets the latest stable, 1.27.4 (released 2026-11-02).
 
-**Primary Dependencies** (all versions verified 2026-11-11):
+**Primary Dependencies** (all versions verified 2026-11-11; the closure actually required is the one
+`go mod tidy` produces):
 `modernc.org/sqlite v1.62.0` (pure Go, no cgo) · `github.com/goccy/go-yaml v1.19.2` ·
 `github.com/pelletier/go-toml/v2 v2.4.3` · `github.com/google/uuid v1.6.0` ·
-`golang.org/x/sync v0.25.0` · `go.opentelemetry.io/otel v1.47.0` · `github.com/google/go-cmp v0.7.0`.
+`golang.org/x/sync v0.25.0`.
 Stdlib `encoding/json`, `log/slog`, `flag`, `crypto/sha256`, `testing`.
+
+`go.opentelemetry.io/otel v1.47.0` and `github.com/google/go-cmp v0.7.0` were planned in R8/R10 but are
+**not** required by this increment: the tracing seam (R8) ships as a local interface whose default is a
+no-op, so no OTel package is imported, and the test style settled on stdlib `testing` without
+`cmp.Diff`. An unused `require` would make `go mod tidy` dirty; the versions above are re-pinned when
+the first real exporter and the first `cmp.Diff` assertion land.
 
 **Storage**: SQLite (WAL, `synchronous=FULL`, single writer connection) for runs, phases, attempts,
 events, decisions, schema migrations; content-addressed filesystem store for artifacts; no external

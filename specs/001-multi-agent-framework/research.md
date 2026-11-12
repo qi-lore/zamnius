@@ -101,6 +101,11 @@ All decisions below were verified against live module metadata on 2026-11-11.
 
 **Rationale**: The constitution mandates structured logs, traces, and metrics. OTel is the ecosystem standard and its Go packages are current (v1.47.0, 2026-10-02). Keeping OTel behind an interface means the core packages stay testable without an exporter and library adopters are not forced into a global provider.
 
+**Status (2026-11-12)**: the interface landed with a no-op default and **no** OTel import, so the
+increment carries no OTel dependency (`internal/observability.Tracer`, `NoopTracer`). The decision
+above still holds for the shape; the v1.47.0 requirement is re-pinned when the first exporter lands,
+because nothing in P1–P3 emits a span a provider could export.
+
 **Alternatives considered**: Prometheus client only (no traces); no tracing in this increment (rejected: audit and debugging of resume are the point of the increment).
 
 ---
@@ -119,9 +124,13 @@ All decisions below were verified against live module metadata on 2026-11-11.
 
 ## R10. Deterministic tests and fault injection
 
-**Decision**: stdlib `testing` + `google/go-cmp` v0.7.0; a scripted fake `ModelClient` compiled into the test binary; a named `faultpoint` hook that panics at labelled boundaries (before/after artifact rename, before/after transaction commit, before lease renewal).
+**Decision**: stdlib `testing`; a scripted fake `ModelClient` compiled into the test binary; a named `faultpoint` hook that panics at labelled boundaries (before/after artifact rename, before/after transaction commit, before lease renewal).
 
-**Rationale**: SC-001/SC-002/SC-003 need interruptions at exact commit boundaries, which is impossible to reach reliably with real providers. In-process fault points cover boundary correctness; one subprocess `SIGKILL` test per resume path covers genuine process death (re-exec pattern in `TestMain`). `go-cmp` gives readable diffs without testify's assertion DSL.
+**Rationale**: SC-001/SC-002/SC-003 need interruptions at exact commit boundaries, which is impossible to reach reliably with real providers. In-process fault points cover boundary correctness; one subprocess `SIGKILL` test per resume path covers genuine process death (re-exec pattern in `TestMain`).
+
+**Status (2026-11-12)**: `google/go-cmp v0.7.0` is planned but not yet used — the suites so far assert with
+stdlib `testing` and explicit error messages, which the constitution's explicit-error style favours.
+The dependency is re-pinned at the first `cmp.Diff` call, so `go mod tidy` stays clean until then.
 
 **Alternatives considered**: `testify` (popular, but its `require`/`assert` idiom conflicts with the constitution's explicit-error style and adds little over `cmp.Diff`); `go.uber.org/goleak` (consider later; not needed for the first increment).
 
