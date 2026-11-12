@@ -15,6 +15,12 @@ description: "Task list for the Zamnius core increment (stories P1–P3)"
 
 **Organization**: Tasks are grouped by user story so each story is independently implementable and testable.
 
+**Execution protocol (mandatory — constitution Principle XI)**: implement **one task at a time** and stop for
+review after each. A *task* is one numbered entry below (`T044`), not a phase and not a batch. Per task: make the
+change, run the task's tests plus `go build ./...` / `go vet ./...`, tick the checkbox, update
+`## Implementation status`, then **report and wait** — do not begin the next task until the reviewer approves.
+Never bundle several tasks into one turn or one commit; a human reviews each change on its own.
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies on incomplete tasks)
@@ -260,6 +266,9 @@ Task: "Lease contention, terminal no-op, drift refusal … test/recoverability/o
 ### Notes
 
 - `[P]` marks tasks that touch different files and have no dependency on an incomplete task.
+- Implement one task at a time and stop after each for review (constitution Principle XI): verify the task, tick
+  its checkbox, update `## Implementation status`, report, and wait for approval — never roll on into the next
+  task unprompted.
 - Verify every test task fails before implementing.
 - Commit after each logical group; a source file never lands without its tests.
 - Never push or touch the remote — only the `gitt` agent performs remote operations, on explicit instruction.
@@ -273,6 +282,11 @@ Written by the implementing agent mid-`/speckit.implement` so a fresh session ca
 the files alone (constitution Principle II.1). The checkboxes above are authoritative for
 "done"; this section records what is genuinely finished, what is implemented but untested, and
 what is untouched. Update it (or fold it into the checkboxes) as phases complete.
+
+**Execution rule in force (constitution Principle XI — added 2026-11-12):** implement **one task at a time** and
+**stop for review after each**. Per task: verify (its tests + `go build ./...`/`go vet ./...`), tick the checkbox,
+update this section, report what changed and how it was verified, then wait for the reviewer's go-ahead before
+starting the next task. Never batch several tasks into one turn or one commit.
 
 ### Verified green at this checkpoint
 
