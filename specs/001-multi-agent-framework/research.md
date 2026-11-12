@@ -11,11 +11,13 @@ All decisions below were verified against live module metadata on 2026-11-11.
 
 ## R1. Go toolchain version
 
-**Decision**: Require Go 1.25 or newer in `go.mod` (`go 1.25.0`), develop and CI against the current stable release, which is **Go 1.27.4** (verified at `go.dev/VERSION?m=text`, released 2026-11-02).
+**Decision**: Require Go 1.26 or newer in `go.mod` (`go 1.26.0`), develop and CI against the current stable release, which is **Go 1.27.4** (verified at `go.dev/VERSION?m=text`, released 2026-11-02).
 
-**Rationale**: The spec and constitution require Go 1.25+. Pinning the *minimum* at 1.25 keeps the module usable by adopters who have not upgraded, while CI on 1.27.4 catches modern-toolchain breakage. No approved feature depends on a post-1.25 API, so a higher floor would discard users for nothing.
+**Rationale**: The spec and constitution require Go 1.25+. Pinning the *minimum* at 1.26 keeps the module usable by adopters who have not upgraded, while CI on 1.27.4 catches modern-toolchain breakage. No approved feature depends on a post-1.26 API, so a higher floor would discard users for nothing.
 
-**Alternatives considered**: Pinning `go 1.27` (simple, but needlessly narrow); omitting the version (invalid for modules since 1.21).
+**Minimum raised from 1.25 to 1.26 on 2026-11-12**: the pinned durable-store driver, `modernc.org/sqlite v1.62.0`, declares `go 1.26.0` in its own `go.mod`, so a `go 1.25.0` directive is rejected at resolution time. Raising the floor is the honest fix; downgrading the driver would contradict R2, and switching to a cgo driver would break the `CGO_ENABLED=0` build the constitution's offline-testing rule depends on.
+
+**Alternatives considered**: Pinning `go 1.27` (simple, but needlessly narrow); omitting the version (invalid for modules since 1.21); an older `modernc.org/sqlite` (forces a driver downgrade for a floor nobody on this project uses).
 
 **Consequence for this environment**: `go` **is** available. Verified 2026-11-11: `go1.27.3 darwin/arm64` at `/Users/aiagent/.local/go/bin/go` (on `PATH`, `GOTOOLCHAIN=auto`). Development runs on 1.27.3; CI targets the latest stable, 1.27.4. No toolchain installation task is required.
 

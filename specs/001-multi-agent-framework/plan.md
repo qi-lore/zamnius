@@ -19,7 +19,7 @@ uncommitted attempt from recorded inputs with idempotent side effects.
 
 ## Technical Context
 
-**Language/Version**: Go 1.25 minimum in `go.mod`; development toolchain verified on this host as **go1.27.3 darwin/arm64** (`/Users/aiagent/.local/go/bin/go`); CI targets the latest stable, 1.27.4 (released 2026-11-02).
+**Language/Version**: Go 1.26 minimum in `go.mod` (raised from 1.25 on 2026-11-12 because `modernc.org/sqlite v1.62.0` declares `go 1.26.0`; see [research.md](research.md) R1); development toolchain verified on this host as **go1.27.3 darwin/arm64** (`/Users/aiagent/.local/go/bin/go`); CI targets the latest stable, 1.27.4 (released 2026-11-02).
 
 **Primary Dependencies** (all versions verified 2026-11-11):
 `modernc.org/sqlite v1.62.0` (pure Go, no cgo) · `github.com/goccy/go-yaml v1.19.2` ·

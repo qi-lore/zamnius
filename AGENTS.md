@@ -58,7 +58,8 @@ alone (constitution Principle II).
 ## Environment
 
 - Go: `go1.27.3 darwin/arm64` at `/Users/aiagent/.local/go/bin/go` (on `PATH`, `GOTOOLCHAIN=auto`).
-  `go.mod` targets Go 1.25 minimum; CI targets 1.27.4.
+  `go.mod` requires Go 1.26 minimum (`modernc.org/sqlite v1.62.0` declares `go 1.26.0`);
+  CI targets 1.27.4.
 - **If `go build` fails with `signal: killed` / exit 137**, the toolchain carries macOS quarantine:
   `xattr -dr com.apple.quarantine /Users/aiagent/.local/go`. Verify with `go tool compile -V`.
 - Verify work with, in order:
