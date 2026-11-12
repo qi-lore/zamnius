@@ -149,6 +149,36 @@ func (a *App) Engine() (*zamnius.Engine, error) {
 	return engine, nil
 }
 
+// Inspector builds an engine for read-only commands. It resolves no provider, so a
+// run stays readable after the credential that produced it has expired; any attempt
+// to execute work fails with the credential error rather than silently substituting
+// a fake model.
+func (a *App) Inspector() (*zamnius.Engine, error) {
+	engine, err := zamnius.New(zamnius.Options{
+		Store:     a.Store,
+		Artifacts: a.Artifacts,
+		Models:    inspectorRegistry{},
+		Logger:    a.Logger,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return engine, nil
+}
+
+// inspectorRegistry satisfies the model port for inspection and refuses to
+// resolve anything: a read-only command must never be able to run work by accident.
+type inspectorRegistry struct{}
+
+// Client implements zamnius.ModelRegistry.
+func (inspectorRegistry) Client(provider string) (zamnius.ModelClient, error) {
+	return nil, &domain.Error{
+		Class: domain.ErrClassPermanent,
+		Msg:   fmt.Sprintf("provider %q is not resolvable for a read-only command", provider),
+		Hint:  fmt.Sprintf("set %s to execute work", observability.SecretEnvVar),
+	}
+}
+
 // registryAdapter exposes the concrete registry through the public contract. The
 // two interfaces differ only in the name of the client type they return, which Go
 // treats as unrelated, so the bridge is explicit rather than implicit.
