@@ -3,7 +3,7 @@ package fault_test
 import (
 	"testing"
 
-	"github.com/hIMEI29A/zamnius/internal/fault"
+	"github.com/prompt-fu/zamnius/internal/fault"
 )
 
 func TestHitIsNoOpWhenDisarmed(t *testing.T) {

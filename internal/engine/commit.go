@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/hIMEI29A/zamnius/internal/definition"
-	"github.com/hIMEI29A/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/definition"
+	"github.com/prompt-fu/zamnius/internal/domain"
 )
 
 // commitRun persists a run-level change with its events and decisions.

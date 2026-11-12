@@ -1,6 +1,6 @@
 package definition
 
-import "github.com/hIMEI29A/zamnius/internal/domain"
+import "github.com/prompt-fu/zamnius/internal/domain"
 
 // Builder assembles a definition in code. It exists so the programmatic path
 // produces exactly what the declarative path produces, including defaults and

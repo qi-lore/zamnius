@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hIMEI29A/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/domain"
 )
 
 // domainSchemaVersion and errMigrationRefused mirror the domain package. They are

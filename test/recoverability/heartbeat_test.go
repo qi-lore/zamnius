@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/hIMEI29A/zamnius/internal/definition"
-	"github.com/hIMEI29A/zamnius/internal/domain"
-	"github.com/hIMEI29A/zamnius/internal/engine"
-	"github.com/hIMEI29A/zamnius/test/fakes"
+	"github.com/prompt-fu/zamnius/internal/definition"
+	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/engine"
+	"github.com/prompt-fu/zamnius/test/fakes"
 )
 
 // This file covers the lease heartbeat (T048, ADR-0004, FR-016). Ownership is a

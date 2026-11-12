@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hIMEI29A/zamnius/internal/definition"
-	"github.com/hIMEI29A/zamnius/internal/domain"
-	"github.com/hIMEI29A/zamnius/internal/engine"
+	"github.com/prompt-fu/zamnius/internal/definition"
+	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/engine"
 )
 
 // gatedModel answers only once its gate is opened, and observes its call context

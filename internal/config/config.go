@@ -20,7 +20,7 @@ import (
 	"github.com/goccy/go-yaml"
 	toml "github.com/pelletier/go-toml/v2"
 
-	"github.com/hIMEI29A/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/domain"
 )
 
 // Setting names, used verbatim in error hints so they match the file keys.

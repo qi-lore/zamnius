@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hIMEI29A/zamnius/internal/definition"
-	"github.com/hIMEI29A/zamnius/internal/domain"
-	"github.com/hIMEI29A/zamnius/internal/engine"
+	"github.com/prompt-fu/zamnius/internal/definition"
+	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/engine"
 )
 
 // TestPhasesRunInDeclaredOrderAndPublishArtifactsFirst is US1 scenario 1: a phase

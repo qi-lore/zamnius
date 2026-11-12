@@ -18,7 +18,7 @@ Related: [contracts/cli.md](contracts/cli.md), [contracts/store.md](contracts/st
 **Setup**
 
 ```bash
-git clone github.com/hIMEI29A/zamnius && cd zamnius
+git clone github.com/prompt-fu/zamnius && cd zamnius
 CGO_ENABLED=0 go build ./...
 go test ./... -race
 ```

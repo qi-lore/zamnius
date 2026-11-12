@@ -12,7 +12,7 @@ import (
 	"github.com/goccy/go-yaml"
 	toml "github.com/pelletier/go-toml/v2"
 
-	"github.com/hIMEI29A/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/domain"
 )
 
 // Format identifies a declarative definition encoding.

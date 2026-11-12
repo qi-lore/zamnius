@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hIMEI29A/zamnius/pkg/zamnius"
+	"github.com/prompt-fu/zamnius/pkg/zamnius"
 )
 
 func TestSentinelsMatchThroughWrapping(t *testing.T) {

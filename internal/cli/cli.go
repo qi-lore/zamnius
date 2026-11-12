@@ -12,8 +12,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hIMEI29A/zamnius/internal/config"
-	"github.com/hIMEI29A/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/config"
+	"github.com/prompt-fu/zamnius/internal/domain"
 )
 
 // Version is the release of this build. The public contract set is versioned

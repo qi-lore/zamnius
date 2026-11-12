@@ -8,7 +8,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/hIMEI29A/zamnius/internal/cli"
+	"github.com/prompt-fu/zamnius/internal/cli"
 )
 
 func main() {

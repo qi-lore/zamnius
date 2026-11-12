@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/hIMEI29A/zamnius/internal/definition"
-	"github.com/hIMEI29A/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/definition"
+	"github.com/prompt-fu/zamnius/internal/domain"
 )
 
 // TestFingerprintIsIdenticalAcrossFormats is the contract of FR-061: the encoding

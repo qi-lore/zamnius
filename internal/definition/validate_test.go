@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hIMEI29A/zamnius/internal/definition"
-	"github.com/hIMEI29A/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/definition"
+	"github.com/prompt-fu/zamnius/internal/domain"
 )
 
 // TestNormalizeRejectsInvalidDefinitions is the SC-012 discipline applied to

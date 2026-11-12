@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hIMEI29A/zamnius/internal/audit"
-	"github.com/hIMEI29A/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/audit"
+	"github.com/prompt-fu/zamnius/internal/domain"
 )
 
 // reconcileAttempts repairs the two states a crash can leave behind. An attempt

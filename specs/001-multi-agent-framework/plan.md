@@ -158,7 +158,7 @@ increment does not need.
 
 ## Execution Sequencing (input for `/speckit.tasks`)
 
-1. **Skeleton**: `go mod init github.com/hIMEI29A/zamnius`, package skeleton, `go build ./...` and
+1. **Skeleton**: `go mod init github.com/prompt-fu/zamnius`, package skeleton, `go build ./...` and
    `go vet ./...` green on go1.27.3.
 2. **Config & definitions**: strict loaders, canonicalisation, fingerprint, validation messages
    (SC-012) — TDD from the JSON Schema.

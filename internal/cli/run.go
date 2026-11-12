@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/hIMEI29A/zamnius/internal/app"
-	"github.com/hIMEI29A/zamnius/internal/config"
-	"github.com/hIMEI29A/zamnius/internal/definition"
-	"github.com/hIMEI29A/zamnius/pkg/zamnius"
+	"github.com/prompt-fu/zamnius/internal/app"
+	"github.com/prompt-fu/zamnius/internal/config"
+	"github.com/prompt-fu/zamnius/internal/definition"
+	"github.com/prompt-fu/zamnius/pkg/zamnius"
 )
 
 // runFlags are the flags every `run` subcommand shares.

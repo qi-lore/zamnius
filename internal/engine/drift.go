@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hIMEI29A/zamnius/internal/definition"
-	"github.com/hIMEI29A/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/definition"
+	"github.com/prompt-fu/zamnius/internal/domain"
 )
 
 // checkDefinitionDrift compares the fingerprint of the stored snapshot with the

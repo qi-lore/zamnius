@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/hIMEI29A/zamnius/internal/domain"
-	"github.com/hIMEI29A/zamnius/internal/fault"
-	"github.com/hIMEI29A/zamnius/internal/store/artifactfs"
+	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/fault"
+	"github.com/prompt-fu/zamnius/internal/store/artifactfs"
 )
 
 func TestPutWritesVerifiableContentAddressedFile(t *testing.T) {

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/hIMEI29A/zamnius/specs/001-multi-agent-framework/contracts/workflow-definition.schema.json",
+  "$id": "https://github.com/prompt-fu/zamnius/specs/001-multi-agent-framework/contracts/workflow-definition.schema.json",
   "title": "Zamnius workflow definition",
   "description": "Canonical shape of a workflow definition. YAML, JSON, and TOML documents decode into this shape; both declarative files and programmatic builders validate against it.",
   "type": "object",

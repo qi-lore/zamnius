@@ -55,4 +55,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/hIMEI29A/zamnius
+        - github.com/prompt-fu/zamnius

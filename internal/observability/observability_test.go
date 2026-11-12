@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hIMEI29A/zamnius/internal/observability"
+	"github.com/prompt-fu/zamnius/internal/observability"
 )
 
 func TestLoggerRedactsSecretsFromMessageAndAttributes(t *testing.T) {

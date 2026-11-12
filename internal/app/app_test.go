@@ -12,12 +12,12 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/hIMEI29A/zamnius/internal/app"
-	"github.com/hIMEI29A/zamnius/internal/config"
-	"github.com/hIMEI29A/zamnius/internal/definition"
-	"github.com/hIMEI29A/zamnius/internal/domain"
-	"github.com/hIMEI29A/zamnius/internal/observability"
-	"github.com/hIMEI29A/zamnius/pkg/zamnius"
+	"github.com/prompt-fu/zamnius/internal/app"
+	"github.com/prompt-fu/zamnius/internal/config"
+	"github.com/prompt-fu/zamnius/internal/definition"
+	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/observability"
+	"github.com/prompt-fu/zamnius/pkg/zamnius"
 )
 
 // provider is a stand-in OpenAI-compatible service. It answers every request with

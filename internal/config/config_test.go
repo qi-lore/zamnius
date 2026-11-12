@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hIMEI29A/zamnius/internal/config"
-	"github.com/hIMEI29A/zamnius/internal/domain"
+	"github.com/prompt-fu/zamnius/internal/config"
+	"github.com/prompt-fu/zamnius/internal/domain"
 )
 
 func TestDefaultsWhenNothingIsSupplied(t *testing.T) {

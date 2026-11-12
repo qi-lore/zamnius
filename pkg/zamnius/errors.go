@@ -1,6 +1,6 @@
 package zamnius
 
-import "github.com/hIMEI29A/zamnius/internal/domain"
+import "github.com/prompt-fu/zamnius/internal/domain"
 
 // Exported error vocabulary. Callers match with errors.Is, e.g.
 //
