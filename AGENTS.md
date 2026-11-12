@@ -33,11 +33,11 @@ alone (constitution Principle II).
 - Plan, research, data model, contracts, quickstart, and **`tasks.md`** are committed.
 - `tasks.md` holds **68 TDD tasks in six phases**: Setup T001–T005, Foundational T006–T019
   (blocks every story), US1 T020–T042, US2 T043–T053, US3 T054–T062, Polish T063–T068.
-- **Implementation is well under way: T001–T046 are done and tested, so US1 is complete, US2's
-  genuine-process-death and ownership/idempotence proofs are in place, and T043–T046 are all
-  committed. The next action is to resume US2 at T047** (attempt reconciliation: add
-  `restarted_from` and idempotency keys). For the exact per-task state — done,
-  implemented-but-untested, or untouched — and the design decisions taken along the way, read
+- **Implementation is well under way: T001–T047 are done and tested, so US1 is complete, US2's
+  genuine-process-death, ownership/idempotence, and attempt-reconciliation proofs are in place, and
+  T043–T047 are all committed. The next action is to resume US2 at T048** (lease heartbeat:
+  renewal at TTL/3, renewal failure demoting the run to `paused`). For the exact per-task state —
+  done, implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
   boxes above it are updated.
 - Branch: `001-multi-agent-framework`, ~50 commits on top of `dev`. Per the constitution,
@@ -64,7 +64,7 @@ alone (constitution Principle II).
    single-host lease (ADR-0004) are load-bearing; changes there need a new ADR.
 6. **Fix the artifact, not the chat.** If behaviour must change, update spec → plan → tasks → code.
 7. **One task at a time, then stop for review.** Work proceeds in `tasks.md` order, one numbered task per turn
-   (`T047` — not a phase, not a story, not a batch). When a task is done: run its tests plus `go build ./...`
+   (`T048` — not a phase, not a story, not a batch). When a task is done: run its tests plus `go build ./...`
    and `go vet ./...`, set its checkbox, update `## Implementation status`, report what changed, where, and how
    it was verified, then **STOP** and wait for the reviewer's go-ahead before starting the next task. Silence,
    a resumed session, or your own confidence is never approval. Never bundle several tasks into one turn or one
@@ -105,7 +105,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.implement # implement the NEXT single unchecked task (now T047), verify it, then STOP and report for review
+/speckit.implement # implement the NEXT single unchecked task (now T048), verify it, then STOP and report for review
 /speckit.analyze   # cross-artifact consistency check
 ```
 
