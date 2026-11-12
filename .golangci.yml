@@ -1,0 +1,58 @@
+# golangci-lint configuration for Zamnius.
+# Rationale: the constitution mandates the Uber Go Style Guide (Principle X) and
+# error wrapping (X.2). These linters enforce exactly those rules and nothing more;
+# adding opinionated style linters here would fight the codebase rather than protect it.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck      # unchecked errors, incl. deferred Close
+    - govet         # shadowed variables, lost cancel funcs, printf
+    - staticcheck   # dead code, invalid conversions
+    - revive        # exported doc comments, context-first parameters
+    - gocritic      # style and correctness diagnostics
+    - errorlint     # forces errors.Is/As and %w wrapping
+    - misspell
+    - unconvert
+    - bodyclose
+    - copyloopvar
+  settings:
+    revive:
+      rules:
+        - name: context-as-argument
+        - name: exported
+          arguments:
+            - disableStutteringCheck
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: package-comments
+          disabled: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+      disabled-checks:
+        - hugeParam        # small domain structs are passed by value on purpose
+        - rangeValCopy
+  exclusions:
+    rules:
+      # Tests assert on golden JSON and build fixtures; style nits cost more than they catch.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gocritic
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/hIMEI29A/zamnius

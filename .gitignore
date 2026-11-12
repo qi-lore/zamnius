@@ -49,3 +49,8 @@ notes/
 
 # Local run state (database + artifacts); never committed
 .zamnius/
+
+# Locally built binaries and recoverability scratch state
+/zamnius
+/bin/
+/test/.state/
