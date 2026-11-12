@@ -123,7 +123,7 @@ Single Go module `github.com/hIMEI29A/zamnius`, per [plan.md](plan.md) §Project
 ### Tests for User Story 2 (write first, must fail) ⚠️
 
 - [X] T043 [P] [US2] Write the fault-injection resume suite in `test/recoverability/resume_test.go` covering the four interruption points — before/after artifact rename and before/after transaction commit, through `internal/fault` — asserting for each: the resume completes, artifacts are byte-identical to the control run, completed branches are not re-executed, an `attempt.abandoned` names the interrupted attempt, a `resume_restart` decision record states the cause, and no `sha256` is committed twice for one attempt (SC-001, SC-002, SC-003); parametrise so the suite can run with `-count=10`
-- [ ] T044 [P] [US2] Write the genuine-process-death harness — `TestMain` re-exec of the test binary as a child that starts a run and is killed with `SIGKILL` mid-branch, the parent then resuming in-process — in `test/recoverability/sigkill_test.go`
+- [X] T044 [P] [US2] Write the genuine-process-death harness — `TestMain` re-exec of the test binary as a child that starts a run and is killed with `SIGKILL` mid-branch, the parent then resuming in-process — in `test/recoverability/sigkill_test.go`
 - [ ] T045 [P] [US2] Write ownership and idempotence tests in `test/recoverability/ownership_test.go`: two concurrent `AcquireLease` calls on one run yield exactly one success and the loser gets `ErrRunAlreadyOwned`; resuming a terminal run exits `0` and appends no events (FR-018); a resume after lease expiry records `run.taken_over` with the previous owner; resuming with a mismatched definition fingerprint is refused with an actionable diagnostic unless `--allow-definition-drift` is set, in which case the override is recorded as a decision
 
 ### Implementation for User Story 2
@@ -292,8 +292,11 @@ starting the next task. Never batch several tasks into one turn or one commit.
 
 - `go build ./...`, `go vet ./...`, `go test ./... -count=1`, `go test ./... -race -count=1` all pass.
 - `CGO_ENABLED=0 go build ./...` passes.
-- Branch `001-multi-agent-framework`; working tree clean at commit `10579f0` (spend/`--json`
-  details aside, see the log). All commits are local — nothing is pushed.
+- `go test ./test/recoverability -run TestResumeAfterProcessKill -count=10` passes with no flakes; the
+  SIGKILL harness is verified non-vacuous by mutation (see T044 below).
+- Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
+  the process-hygiene documents (Principle XI, ADR-0007, ADR-0008), initialized the wiki and memory-md
+  extensions, and completed T044; see `git log` for the exact head.
 - Toolchain: `go1.27.3 darwin/arm64` on `PATH`; `go.mod` floor is Go 1.26.
 
 ### Done (implemented and covered by a passing test)
@@ -312,6 +315,22 @@ starting the next task. Never batch several tasks into one turn or one commit.
   end-to-end by the T043 suite.
   - **Residual coverage gap**: the failure paths — `failOnIntegrity` on a broken chain, and the
     pause-with-recorded-reason path — are not yet asserted by a dedicated test. T057/T059 must cover them.
+- **T044** Genuine process-death harness — `test/recoverability/sigkill_test.go`. `TestMain` re-executes
+  the test binary as a child (`ZAMNIUS_SIGKILL_CHILD=1`); the child wires the engine through the same
+  `newInstance` path the in-process tests use, starts the fan-out definition, answers one branch, blocks
+  in the other, and is then killed with `SIGKILL` by the parent. The child reports over stdout
+  (`CHILD-RUN-ID`, `CHILD-BRANCH-BLOCKED`, `CHILD-BRANCH-COMMITTED`), and the parent waits for a
+  *committed sibling branch plus a blocked branch* before killing, so the interruption point is observed
+  from the durable record rather than assumed. The parent then asserts: the run was left `running`; the
+  child really died by `SIGKILL` (`syscall.WaitStatus.Signaled()`); the resume completes; the committed
+  branch is not re-executed; the interrupted branch restarts exactly once; artifacts are byte-identical to
+  an uninterrupted control run; exactly one `attempt.abandoned` names the interrupted attempt; a
+  `resume_restart` decision carries a rationale; and no digest is committed twice for one attempt.
+  Non-vacuousness was confirmed by mutation: disabling `session.recordRecovered` fails the
+  no-re-execution assertion, and skipping running attempts in `reconcileAttempts` fails the
+  abandoned-attempt assertions. `harness_test.go` did not change behaviour: `openInstance` now delegates
+  to a new error-returning `newInstance`, and `fanoutDefinition` to a new `branchingDefinition`, so the
+  child and the parent share one construction path and one definition (DRY, constitution IX).
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
@@ -330,7 +349,6 @@ starting the next task. Never batch several tasks into one turn or one commit.
 
 ### Not started
 
-- **T044** SIGKILL re-exec harness — `test/recoverability/sigkill_test.go` does not exist.
 - **T045** Ownership and idempotence tests — `test/recoverability/ownership_test.go` does not exist.
 - **T050** Schema-version handling — `internal/store/sqlite/version.go` does not exist. A
   `CheckRunVersion` currently lives in `internal/store/sqlite/migrate.go`; the task's named file
