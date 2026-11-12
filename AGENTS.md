@@ -27,14 +27,19 @@ decisions     docs/domain_knowledge/adr/0001–0006           architectural rati
 Chat history is never the source of truth. A fresh agent must be able to resume from these files
 alone (constitution Principle II).
 
-## Current state (2026-11-11)
+## Current state (2026-11-12)
 
 - Spec is grilled and committed; 12 decisions recorded in `spec.md` → `## Clarifications`.
-- Plan, research, data model, contracts, and quickstart are committed.
-- **`tasks.md` does not exist yet.** The next step is `/speckit.tasks`, then `/speckit.implement`.
-- Branch: `001-multi-agent-framework`, 2+ commits on top of `main` (which equals `dev`).
+- Plan, research, data model, contracts, quickstart, and **`tasks.md`** are committed.
+- `tasks.md` holds **68 TDD tasks in six phases**: Setup T001–T005, Foundational T006–T019
+  (blocks every story), US1 T020–T042, US2 T043–T053, US3 T054–T062, Polish T063–T068.
+- **The next step is `/speckit.implement`, starting at T001.** Run `/speckit.analyze` first if a
+  cross-artifact consistency check is wanted before code exists.
+- Branch: `001-multi-agent-framework`, 20 commits on top of `main` (which equals `dev`).
   Per the constitution, feature branches target `dev`, not `main`.
 - No source code exists yet. No commit may claim behaviour that has no test.
+- Keep this section current when a phase completes: it is how a fresh session resumes
+  (constitution Principle II.1), so a stale line here is a defect, not a cosmetic issue.
 
 ## Working agreements
 
@@ -72,8 +77,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.tasks     # next: break plan.md into ordered TDD tasks
-/speckit.implement # execute tasks.md
+/speckit.implement # next: execute tasks.md from T001
 /speckit.analyze   # cross-artifact consistency check
 ```
 
