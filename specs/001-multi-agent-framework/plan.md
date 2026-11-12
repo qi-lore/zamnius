@@ -251,6 +251,20 @@ and the A2A protocol. The binding constraint is FR-028 itself — addressing, pe
 exactly-once observation by the recipient under retries — not the transport; the choice is made
 against that constraint when the increment is planned.
 
+### Future direction (proposed, not committed)
+
+Four capabilities are proposed for future increments and are **not** committed to any current scope.
+Like the messaging transport above, they are recorded here as candidates so a future increment can
+pick them up; each is specified and planned by the increment that would deliver it.
+
+- **Custom collections** — user-defined, named groups of reusable components, primarily prompt
+  templates but extensible to other reusable artefacts (tools, roles, workflow definitions).
+- **Semi-autonomous agent chains with gates** — configurable chains for long-running tasks that pause
+  at predefined checkpoints (gates) for human oversight before continuing.
+- **Gate notifications** — a notification system that alerts the operator to a gate and its
+  intermediate results over configurable channels such as email, Telegram, or others.
+- **Interactive surfaces** — a web interface and/or a text-based user interface (TUI).
+
 ## Completion Criteria for This Plan
 
 - [x] Technical Context has no unresolved clarification
