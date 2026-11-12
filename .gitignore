@@ -43,3 +43,17 @@ credentials.*
 .DS_Store
 notes/
 
+
+# pnpm debug output (recreated by tooling, never part of the repo)
+.pnpm-debug.log
+
+# Local run state (database + artifacts); never committed
+.zamnius/
+
+# Locally built binaries and recoverability scratch state
+/zamnius
+/bin/
+/test/.state/
+
+# Local agent work plans (working docs, not durable knowledge)
+.opencode/plan/
