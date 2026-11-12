@@ -32,6 +32,14 @@ type harness struct {
 // newHarness builds an engine whose answers come from answer().
 func newHarness(t *testing.T, answer func(domain.ModelRequest) (domain.ModelResponse, error)) *harness {
 	t.Helper()
+	return newHarnessWithModel(t, fakes.NewFuncClient(answer))
+}
+
+// newHarnessWithModel builds an engine over an arbitrary model port. It exists for
+// the cancellation suite, whose scripted model must observe its call context rather
+// than answer from the request alone.
+func newHarnessWithModel(t *testing.T, model engine.Model) *harness {
+	t.Helper()
 
 	layout := fakes.StateLayout(fakes.TempStateDir(t))
 
@@ -46,14 +54,14 @@ func newHarness(t *testing.T, answer func(domain.ModelRequest) (domain.ModelResp
 		t.Fatalf("open artifact store: %v", err)
 	}
 
-	client := fakes.NewFuncClient(answer)
+	funcClient, _ := model.(*fakes.FuncClient)
 	observer := fakes.NewObserver()
 	clock := fakes.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC), time.Millisecond)
 
 	eng, err := engine.New(engine.Options{
 		Store:     store,
 		Artifacts: artifactStore,
-		Models:    staticRegistry{client: client},
+		Models:    staticRegistry{client: model},
 		Clock:     clock.Now,
 		IDSource:  fakes.NewIDSource(),
 		Sleep:     func(context.Context, time.Duration) error { return nil },
@@ -68,7 +76,7 @@ func newHarness(t *testing.T, answer func(domain.ModelRequest) (domain.ModelResp
 		engine:    eng,
 		store:     store,
 		artifacts: artifactStore,
-		client:    client,
+		client:    funcClient,
 		observer:  observer,
 		clock:     clock,
 	}

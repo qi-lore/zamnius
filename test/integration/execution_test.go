@@ -429,3 +429,46 @@ func TestObserverSeesOrderedFacts(t *testing.T) {
 		t.Fatalf("observer finished = %+v", finished)
 	}
 }
+
+// TestEveryDeclaredOutputKindIsCommitted pins data-model.md §3 invariant 2: a
+// phase that promises several output kinds cannot be recorded succeeded until it
+// has committed an artifact for each of them. The kinds are content-addressed, so
+// the phase's single produced document becomes one artifact per declared kind.
+func TestEveryDeclaredOutputKindIsCommitted(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t, func(req domain.ModelRequest) (domain.ModelResponse, error) {
+		return ok("one document for "+req.Metadata["phase"], 5, 2), nil
+	})
+
+	def := h.workflow("multi-output", func(b *definition.Builder) *definition.Builder {
+		return b.WithPhase("deliver", agent("deliver"),
+			definition.WithOutputs("plan", "report"))
+	})
+
+	result := h.run(def)
+	if result.Status != domain.RunSucceeded {
+		t.Fatalf("status = %q, want succeeded", result.Status)
+	}
+
+	refs, err := h.engine.Artifacts(context.Background(), result.RunID)
+	if err != nil {
+		t.Fatalf("Artifacts() error = %v", err)
+	}
+
+	kinds := make(map[string]int)
+	digests := make(map[string]bool)
+	for _, ref := range refs {
+		kinds[ref.Kind]++
+		if digests[ref.SHA256] {
+			t.Errorf("artifact %s was committed twice, but a phase must not duplicate a digest", ref.SHA256)
+		}
+		digests[ref.SHA256] = true
+	}
+	if kinds["plan"] != 1 {
+		t.Errorf("plan artifacts = %d, want 1", kinds["plan"])
+	}
+	if kinds["report"] != 1 {
+		t.Errorf("report artifacts = %d, want 1", kinds["report"])
+	}
+}

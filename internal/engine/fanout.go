@@ -84,7 +84,7 @@ func (s *session) runFanout(ctx context.Context, index int, phase definition.Pha
 			result.FailureReason = causeOf(err)
 		} else if ref != nil {
 			result.Artifacts = append(result.Artifacts, *ref)
-			recordArtifacts(s.kinds, s.artifacts, phase.Name, []domain.ArtifactRef{*ref})
+			s.recordArtifacts(phase.Name, []domain.ArtifactRef{*ref})
 		}
 	}
 

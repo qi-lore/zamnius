@@ -11,6 +11,10 @@ import (
 	"github.com/hIMEI29A/zamnius/internal/domain"
 )
 
+// DefaultArtifactKind labels the artifact of a phase that declares no outputs: the
+// document exists, so it is recorded under a neutral kind rather than dropped.
+const DefaultArtifactKind = "report"
+
 // phaseOutcome is the committed result of running one phase, with everything the
 // caller needs to apply the failure policy or build the join.
 type phaseOutcome struct {
@@ -126,7 +130,11 @@ func (s *session) executeAttempts(ctx context.Context, index int, phase definiti
 			PromptVersion:    promptVersion,
 			StartedAt:        s.engine.now(),
 		}
-		if err := s.commitAttempt(ctx, attempt, nil, []domain.EventDraft{{
+		// The attempt boundary is durable: a start is recorded even if the caller is
+		// cancelled while the provider is being called, so the next session can see
+		// exactly which attempt was in flight (ADR-0003).
+		startCtx, cancelStart := durableContext(ctx)
+		startErr := s.commitAttempt(startCtx, attempt, nil, []domain.EventDraft{{
 			Type:      domain.EventAttemptStarted,
 			Actor:     domain.ActorAgent(agent.Name),
 			Phase:     phase.Name,
@@ -140,8 +148,10 @@ func (s *session) executeAttempts(ctx context.Context, index int, phase definiti
 				"prompt_version":    promptVersion,
 				"input_fingerprint": fingerprint,
 			},
-		}}, nil); err != nil {
-			return phaseOutcome{Status: domain.PhaseFailed, ErrorClass: domain.ErrClassInternal, FailureReason: causeOf(err)}
+		}}, nil)
+		cancelStart()
+		if startErr != nil {
+			return phaseOutcome{Status: domain.PhaseFailed, ErrorClass: domain.ErrClassInternal, FailureReason: causeOf(startErr), Cause: startErr}
 		}
 
 		callCtx, cancel := s.attemptContext(ctx, timeout)
@@ -197,7 +207,7 @@ func (s *session) executeAttempts(ctx context.Context, index int, phase definiti
 					return phaseOutcome{Status: domain.PhaseFailed, ErrorClass: domain.ErrClassInternal, FailureReason: causeOf(err), Cause: err}
 				}
 				s.addSpend(attempt.Usage)
-				recordArtifacts(s.kinds, s.artifacts, phase.Name, refs)
+				s.recordArtifacts(phase.Name, refs)
 
 				if s.observer != nil {
 					s.observer.OnAttemptFinished(ctx, s.run.ID, phase.Name, attemptNo, "")
@@ -214,9 +224,43 @@ func (s *session) executeAttempts(ctx context.Context, index int, phase definiti
 		if class == "" {
 			class = domain.ErrClassInternal
 		}
+		detail := causeOf(callErr)
+
+		// A context stop is not a provider failure: the attempt was interrupted and
+		// its real outcome is unknown, so it is recorded abandoned rather than
+		// failed. The commit is detached from the cancellation so the boundary is
+		// durable even though the caller has already gone away (FR-008, ADR-0003).
+		if isContextStop(callErr) {
+			attempt.Status = domain.AttemptAbandoned
+			attempt.ErrorClass = domain.ErrClassCancelled
+			attempt.ErrorDetail = &detail
+			commitCtx, cancelCommit := durableContext(ctx)
+			commitErr := s.commitAttempt(commitCtx, attempt, nil, []domain.EventDraft{{
+				Type:      domain.EventAttemptAbandoned,
+				Actor:     domain.ActorAgent(agent.Name),
+				Phase:     phase.Name,
+				AttemptID: attempt.ID,
+				Payload: map[string]any{
+					"attempt_no":  attemptNo,
+					"branch":      labelOrPhase(label, phase.Name),
+					"error_class": string(domain.ErrClassCancelled),
+					"detail":      detail,
+					"duration_ms": elapsed,
+				},
+			}}, nil)
+			cancelCommit()
+			if commitErr != nil {
+				return phaseOutcome{Status: domain.PhaseFailed, ErrorClass: domain.ErrClassInternal, FailureReason: causeOf(commitErr), Cause: commitErr}
+			}
+			s.addSpend(attempt.Usage)
+			if s.observer != nil {
+				s.observer.OnAttemptFinished(ctx, s.run.ID, phase.Name, attemptNo, domain.ErrClassCancelled)
+			}
+			return phaseOutcome{Status: domain.PhaseCancelled, Attempts: attempts, ErrorClass: domain.ErrClassCancelled, FailureReason: detail, Cause: callErr}
+		}
+
 		attempt.Status = domain.AttemptFailed
 		attempt.ErrorClass = class
-		detail := causeOf(callErr)
 		attempt.ErrorDetail = &detail
 
 		retry, rationale := s.retryDecision(phase, attemptNo, class)
@@ -256,9 +300,6 @@ func (s *session) executeAttempts(ctx context.Context, index int, phase definiti
 			s.observer.OnAttemptFinished(ctx, s.run.ID, phase.Name, attemptNo, class)
 		}
 
-		if isContextStop(callErr) {
-			return phaseOutcome{Status: domain.PhaseCancelled, Attempts: attempts, ErrorClass: domain.ErrClassCancelled, FailureReason: detail, Cause: callErr}
-		}
 		if !retry {
 			return phaseOutcome{Status: domain.PhaseFailed, Attempts: attempts, ErrorClass: class, FailureReason: detail, Cause: callErr}
 		}
@@ -274,6 +315,19 @@ func (s *session) executeAttempts(ctx context.Context, index int, phase definiti
 // finishPhase commits the terminal phase row, its events, the run spend delta and,
 // for a fan-out phase, the join result.
 func (s *session) finishPhase(ctx context.Context, phase definition.Phase, state *domain.PhaseState, outcome phaseOutcome, label string) error {
+	// A phase may not be recorded succeeded while it promises an output kind it
+	// never committed (data-model.md §3 invariant 2). Every declared kind is
+	// persisted with its attempt, so this is a guard against a future writer
+	// breaking that promise rather than a path a run reaches today.
+	if outcome.Status == domain.PhaseSucceeded {
+		if missing := s.missingOutputs(phase); len(missing) > 0 {
+			outcome.Status = domain.PhaseFailed
+			outcome.ErrorClass = domain.ErrClassInternal
+			outcome.FailureReason = fmt.Sprintf("phase %q promised output kind(s) %s but committed no such artifact",
+				phase.Name, strings.Join(missing, ", "))
+		}
+	}
+
 	ended := s.engine.now()
 	state.Status = outcome.Status
 	state.EndedAt = &ended
@@ -498,17 +552,31 @@ func (s *session) callModel(ctx context.Context, agent definition.AgentRef, phas
 // persistArtifacts writes attempt content to the artifact store and returns the
 // descriptors the caller inserts with the attempt outcome.
 func (s *session) persistArtifacts(ctx context.Context, phase definition.Phase, attemptID uuid.UUID, content, label string) ([]domain.ArtifactRef, error) {
-	kind := "report"
-	if len(phase.Outputs) > 0 {
-		kind = phase.Outputs[0]
+	kinds := phase.Outputs
+	if len(kinds) == 0 {
+		kinds = []string{DefaultArtifactKind}
 	}
-	ref, err := s.engine.artifacts.Put(ctx, s.run.ID, kind, "text/markdown", strings.NewReader(content))
-	if err != nil {
-		return nil, err
+
+	refs := make([]domain.ArtifactRef, 0, len(kinds))
+	for _, kind := range kinds {
+		body := content
+		// A document is identified by its bytes, so two kinds served from one
+		// model answer must differ in their stored form. The declared kind is
+		// written as a marker line, and only when a phase serves several kinds —
+		// which keeps the bytes of the common single-kind phase exactly what the
+		// model produced.
+		if len(kinds) > 1 {
+			body = kind + "\n" + content
+		}
+		ref, err := s.engine.artifacts.Put(ctx, s.run.ID, kind, "text/markdown", strings.NewReader(body))
+		if err != nil {
+			return refs, err
+		}
+		ref.Phase = phase.Name
+		ref.AttemptID = &attemptID
+		refs = append(refs, ref)
 	}
-	ref.Phase = phase.Name
-	ref.AttemptID = &attemptID
-	return []domain.ArtifactRef{ref}, nil
+	return refs, nil
 }
 
 // attemptContext applies a phase or branch timeout to one model call. The timeout

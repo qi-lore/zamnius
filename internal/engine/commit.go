@@ -129,7 +129,7 @@ func (s *session) seedAttemptNumbering(ctx context.Context) error {
 			if attempt.AttemptNo > highest {
 				highest = attempt.AttemptNo
 			}
-			recordArtifacts(s.kinds, s.artifacts, phase.Name, attempt.Artifacts)
+			s.recordArtifacts(phase.Name, attempt.Artifacts)
 		}
 		s.mu.Lock()
 		s.attemptNo[phase.Name] = highest
@@ -138,19 +138,41 @@ func (s *session) seedAttemptNumbering(ctx context.Context) error {
 	return nil
 }
 
-// recordArtifacts remembers produced kinds so the outputs invariant can be
-// checked before a phase is allowed to succeed.
-func recordArtifacts(kinds map[string]map[string]struct{}, refs map[string][]domain.ArtifactRef, phase string, artifacts []domain.ArtifactRef) {
+// recordArtifacts remembers the artifact kinds and refs produced for a phase, so
+// the session can enforce the declared-outputs invariant before a phase succeeds.
+// Fan-out branches call it concurrently, so it takes the session lock: the maps are
+// shared by every branch of a phase.
+func (s *session) recordArtifacts(phase string, artifacts []domain.ArtifactRef) {
 	if len(artifacts) == 0 {
 		return
 	}
-	if kinds[phase] == nil {
-		kinds[phase] = make(map[string]struct{}, len(artifacts))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.kinds[phase] == nil {
+		s.kinds[phase] = make(map[string]struct{}, len(artifacts))
 	}
 	for _, artifact := range artifacts {
-		kinds[phase][artifact.Kind] = struct{}{}
-		refs[phase] = append(refs[phase], artifact)
+		s.kinds[phase][artifact.Kind] = struct{}{}
+		s.artifacts[phase] = append(s.artifacts[phase], artifact)
 	}
+}
+
+// missingOutputs reports the declared output kinds a phase has not committed an
+// artifact for. A phase may not be recorded succeeded while it promises a kind it
+// never produced (data-model.md §3 invariant 2).
+func (s *session) missingOutputs(phase definition.Phase) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	produced := s.kinds[phase.Name]
+	missing := make([]string, 0, len(phase.Outputs))
+	for _, kind := range phase.Outputs {
+		if _, ok := produced[kind]; !ok {
+			missing = append(missing, kind)
+		}
+	}
+	return missing
 }
 
 // upstreamDigests collects the artifact hashes a phase depends on, which makes the
@@ -174,5 +196,13 @@ func (s *session) upstreamDigests(ctx context.Context, phase definition.Phase) (
 // pauseContext is used for commits that happen after the caller's context ended:
 // the run must still record why it stopped (FR-008).
 func pauseContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+}
+
+// durableContext detaches a commit from the caller's cancellation while keeping
+// its values and bounding it in time. An attempt outcome is the recoverability
+// unit (ADR-0003): when the caller is cancelled mid-branch, the attempt row must
+// still reach a terminal state or the next session cannot tell what happened.
+func durableContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 }
