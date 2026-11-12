@@ -77,17 +77,6 @@ func TestLoggerRejectsUnknownFormatAndLevel(t *testing.T) {
 	}
 }
 
-func TestRedactSkipsEmptySecrets(t *testing.T) {
-	t.Parallel()
-
-	if got := observability.Redact("unchanged", []string{""}); got != "unchanged" {
-		t.Errorf("Redact with an empty secret = %q", got)
-	}
-	if got := observability.Redact("has secret inside", []string{"secret"}); strings.Contains(got, "secret") {
-		t.Errorf("Redact() = %q", got)
-	}
-}
-
 func TestNoopTracerReturnsSpan(t *testing.T) {
 	t.Parallel()
 

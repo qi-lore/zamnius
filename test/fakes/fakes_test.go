@@ -3,6 +3,8 @@ package fakes_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -152,5 +154,27 @@ func TestErrorIsClassified(t *testing.T) {
 	err := fakes.Error(domain.ErrClassRateLimited, "429")
 	if !errors.Is(err, err) || domain.ClassOf(err) != domain.ErrClassRateLimited {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestTempStateDirIsIsolatedAndStructured(t *testing.T) {
+	t.Parallel()
+
+	first := fakes.TempStateDir(t)
+	second := fakes.TempStateDir(t)
+	if first == second {
+		t.Fatal("TempStateDir reused a directory")
+	}
+
+	info, err := os.Stat(filepath.Join(first, "artifacts"))
+	if err != nil || !info.IsDir() {
+		t.Fatalf("artifacts subdirectory missing: %v", err)
+	}
+	layout := fakes.StateLayout(first)
+	if layout.Database != filepath.Join(first, "zamnius.db") {
+		t.Errorf("database path = %q", layout.Database)
+	}
+	if layout.Artifact != filepath.Join(first, "artifacts") {
+		t.Errorf("artifact path = %q", layout.Artifact)
 	}
 }
