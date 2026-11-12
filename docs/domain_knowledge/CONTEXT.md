@@ -24,6 +24,7 @@ declarative glossary; put design history in `adr/` and feature behaviour in spec
 - **Recoverability** is a property of persisted artifacts, not of a live process. Anything a resumed run needs must be in the store; conversation history and in-memory state are never authoritative.
 - **Durable memory** is project-scoped knowledge that outlives a session; **short-term memory** belongs to exactly one session and is never shared implicitly.
 - **Untrusted input** covers model output, retrieved documents, repository files, and tool results. Trusted input is what the operator configured.
+- **Development-process terms are not domain terms.** In the project's own workflow a **task** is one numbered entry in a feature's `tasks.md`, and a **review checkpoint** is the verified stop that follows it — neither is a Zamnius domain concept. "Task" is never used for a **Phase** (see above), and the domain sense of **Checkpoint** (a run's resumable committed state) is unrelated to a review stop. See [ADR-0007](adr/0007-one-task-per-turn-review-gate.md) and constitution Principle XI.
 - **Deferred to later increments**: task board and role collaboration, durable and semantic memory, tool registry and version-control tools, HTTP/gRPC surfaces, A2A and AG-UI interoperability.
 
 ## Related documents
