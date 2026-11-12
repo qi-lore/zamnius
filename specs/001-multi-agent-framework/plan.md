@@ -71,9 +71,11 @@ state directory; artifacts up to a few MB each (larger files stream through the 
 | VIII. Quality & testing | **PASS** | Unit + integration + recoverability + audit + secrets suites; coverage gates below. |
 | IX. Simplicity & discipline | **PASS** | No CLI framework, no ORM, no DI container, no speculative interfaces; complexity tracked below. |
 | X. Code style & quality | **PASS** | Uber style, `context.Context` first, wrapped errors, `slog` key-value, UUID ids, no `any` without justification, no transport imports in domain packages. |
+| XI. Incremental delivery & human review gates | **PASS** | One `tasks.md` task per turn, each ending in a verified checkpoint, a report, and a mandatory stop for review (constitution 0.2.0; ADR-0007); checkpoint state lives in `tasks.md` → `## Implementation status`. |
 
 **Gate result**: PASS. Two deliberate scope reductions (roles, memory/tools) are recorded in the spec's
-Clarifications and do not weaken a principle.
+Clarifications and do not weaken a principle. Principle XI is a process gate, added 2026-11-12, and constrains
+*how* this plan is delivered (one task, then stop), not *what* it delivers.
 
 ## Project Structure
 
@@ -213,13 +215,14 @@ No other unjustified complexity: no CLI framework, no ORM, no plugin loader, no 
 Re-evaluated after Phase 1 artifacts: **PASS**. The added contracts introduce no transport layer in
 domain code, no global state, and no new dependency beyond those listed. The two-store design and the
 hash chain are the only added complexity and are justified above. Security scope remains honest: the
-increment claims no sandbox because it executes no tools.
+increment claims no sandbox because it executes no tools. Principle XI (added 2026-11-12) introduces no design
+change — it constrains delivery only, and its protocol is recorded in [tasks.md](tasks.md) and ADR-0007.
 
 ## Handoff State (for a fresh session)
 
 - **Present**: `spec.md` (grilled, 12 clarifications), `plan.md`, `research.md`, `data-model.md`,
   `contracts/` (5 files), `quickstart.md`, `checklists/requirements.md`, `tasks.md` (68 tasks),
-  feature memory files, `docs/domain_knowledge/CONTEXT.md`, ADRs 0001–0006, root `AGENTS.md`.
+  feature memory files, `docs/domain_knowledge/CONTEXT.md`, ADRs 0001–0007, root `AGENTS.md`.
 - **Created**: `tasks.md` (committed 2026-11-12) — Setup T001–T005, Foundational T006–T019,
   US1 T020–T042, US2 T043–T053, US3 T054–T062, Polish T063–T068.
 - **Not yet created**: all source code. The next step is `/speckit.implement`, starting at T001.
