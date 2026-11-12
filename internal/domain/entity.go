@@ -288,14 +288,17 @@ type Lease struct {
 	RecordVersion int
 }
 
-// BranchOutcome is one branch's result inside a fan-out join.
+// BranchOutcome is one branch's result inside a fan-out join. It carries only the
+// branch's durable identity — name, status, attempt number, and the digests of the
+// artifacts it produced — never run-specific identifiers, so the aggregate
+// document is byte-identical for two runs of the same workflow (FR-003).
 type BranchOutcome struct {
 	Branch      string        `json:"branch"`
 	Status      AttemptStatus `json:"status"`
 	AttemptNo   int           `json:"attempt_no"`
 	ErrorClass  ErrorClass    `json:"error_class,omitempty"`
 	ErrorDetail string        `json:"error_detail,omitempty"`
-	Artifacts   []ArtifactRef `json:"artifacts,omitempty"`
+	Digests     []string      `json:"digests,omitempty"`
 }
 
 // JoinResult is the aggregation record of a fan-out phase. Branch order is the

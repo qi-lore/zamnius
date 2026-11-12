@@ -57,6 +57,19 @@ func (s *session) runSingle(ctx context.Context, index int, phase definition.Pha
 		return phaseOutcome{}, err
 	}
 
+	// A resumed run whose attempt already succeeded finishes the phase from its
+	// committed result instead of calling the model again: a completed step is
+	// never re-executed (FR-013, SC-002). The attempt outcome is already durable, so
+	// this adds no attempt row and no spend.
+	if recovered, ok := s.recoveredBranch(phase.Name, phase.Agent.Name); ok {
+		outcome := phaseOutcome{
+			Status:    domain.PhaseSucceeded,
+			Attempts:  recovered.attemptNo,
+			Artifacts: recovered.artifacts,
+		}
+		return outcome, s.finishPhase(ctx, phase, &state, outcome, "")
+	}
+
 	if err := s.startPhase(ctx, &state, phase.Name); err != nil {
 		return phaseOutcome{}, err
 	}

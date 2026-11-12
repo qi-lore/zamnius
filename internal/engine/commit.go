@@ -158,6 +158,43 @@ func (s *session) recordArtifacts(phase string, artifacts []domain.ArtifactRef) 
 	}
 }
 
+// recoveredAttempt is the durable result of an attempt that succeeded before the
+// run was interrupted: the attempt number it was given and the artifacts it
+// committed.
+type recoveredAttempt struct {
+	attemptNo int
+	artifacts []domain.ArtifactRef
+}
+
+// recordRecovered remembers a succeeded attempt so a resumed run can reuse it.
+func (s *session) recordRecovered(phase string, attempt domain.Attempt) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.recovered[phase] == nil {
+		s.recovered[phase] = make(map[string]recoveredAttempt)
+	}
+	s.recovered[phase][attempt.AgentName] = recoveredAttempt{
+		attemptNo: attempt.AttemptNo,
+		artifacts: attempt.Artifacts,
+	}
+}
+
+// recoveredBranch returns the committed result of the agent's successful attempt
+// in this phase, if one exists. The agent name is the durable branch identity that
+// a committed attempt records.
+func (s *session) recoveredBranch(phase, agent string) (recoveredAttempt, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	byAgent, ok := s.recovered[phase]
+	if !ok {
+		return recoveredAttempt{}, false
+	}
+	recovered, ok := byAgent[agent]
+	return recovered, ok
+}
+
 // missingOutputs reports the declared output kinds a phase has not committed an
 // artifact for. A phase may not be recorded succeeded while it promises a kind it
 // never produced (data-model.md §3 invariant 2).

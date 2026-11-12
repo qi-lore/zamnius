@@ -279,6 +279,7 @@ func (e *Engine) Start(ctx context.Context, def definition.Definition, opts Star
 		maxConcurrency: clampConcurrency(opts.MaxConcurrency),
 		kinds:          make(map[string]map[string]struct{}),
 		artifacts:      make(map[string][]domain.ArtifactRef),
+		recovered:      make(map[string]map[string]recoveredAttempt),
 	}
 	// The lease acquisition advanced record_version, so the in-memory run is
 	// refreshed before any guarded commit; a stale version would defeat the guard.
@@ -416,6 +417,10 @@ type session struct {
 	// counter must be guarded.
 	mu        sync.Mutex
 	attemptNo map[string]int
+	// recovered holds, per phase and agent, the durable result of an attempt that
+	// had already succeeded before the interruption. A resumed run reuses it rather
+	// than recomputing, so a completed step is never re-executed (FR-013, SC-002).
+	recovered map[string]map[string]recoveredAttempt
 	// kinds records the artifact kinds produced per phase, which the outputs
 	// invariant checks before a phase may succeed.
 	kinds     map[string]map[string]struct{}

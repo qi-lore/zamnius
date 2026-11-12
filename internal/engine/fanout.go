@@ -29,6 +29,17 @@ func (s *session) runFanout(ctx context.Context, index int, phase definition.Pha
 	var mu sync.Mutex
 	for i := range phase.Branches {
 		branch := phase.Branches[i]
+		// A branch whose attempt already succeeded is reused, not recomputed: the
+		// resumed run executes only the unfinished branches and the join completes
+		// with the full set of results (FR-013, SC-002, US2 scenario 1).
+		if recovered, ok := s.recoveredBranch(phase.Name, branch.Agent.Name); ok {
+			outcomes[i] = phaseOutcome{
+				Status:    domain.PhaseSucceeded,
+				Attempts:  recovered.attemptNo,
+				Artifacts: recovered.artifacts,
+			}
+			continue
+		}
 		group.Go(func() error {
 			// Branches never abort their siblings; they return nil so errgroup
 			// waits for all of them even when one fails.

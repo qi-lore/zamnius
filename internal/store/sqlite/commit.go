@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hIMEI29A/zamnius/internal/domain"
+	"github.com/hIMEI29A/zamnius/internal/fault"
 )
 
 // appendEvents writes events in order, chaining each to the run's previous hash.
@@ -394,6 +395,7 @@ func (s *Store) CreateRun(ctx context.Context, spec domain.RunSpec) (domain.Run,
 		return domain.Run{}, fmt.Errorf("create run: encode spend: %w", err)
 	}
 
+	fault.Hit(fault.BeforeCommit)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return domain.Run{}, fmt.Errorf("create run: begin: %w", err)
@@ -437,6 +439,7 @@ func (s *Store) CreateRun(ctx context.Context, spec domain.RunSpec) (domain.Run,
 	if err := tx.Commit(); err != nil {
 		return domain.Run{}, fmt.Errorf("create run: commit: %w", err)
 	}
+	fault.Hit(fault.AfterCommit)
 
 	return domain.Run{
 		ID:                    spec.ID,
@@ -455,6 +458,7 @@ func (s *Store) CreateRun(ctx context.Context, spec domain.RunSpec) (domain.Run,
 // CommitAttemptResult persists one attempt outcome atomically: attempt row,
 // artifact rows, the phase's new counters, and the describing events/decisions.
 func (s *Store) CommitAttemptResult(ctx context.Context, r domain.AttemptCommit) error {
+	fault.Hit(fault.BeforeCommit)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("commit attempt: begin: %w", err)
@@ -482,11 +486,13 @@ func (s *Store) CommitAttemptResult(ctx context.Context, r domain.AttemptCommit)
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit attempt: commit: %w", err)
 	}
+	fault.Hit(fault.AfterCommit)
 	return nil
 }
 
 // CommitPhaseResult persists a phase transition and any run-level position change.
 func (s *Store) CommitPhaseResult(ctx context.Context, r domain.PhaseCommit) error {
+	fault.Hit(fault.BeforeCommit)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("commit phase: begin: %w", err)
@@ -516,11 +522,13 @@ func (s *Store) CommitPhaseResult(ctx context.Context, r domain.PhaseCommit) err
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit phase: commit: %w", err)
 	}
+	fault.Hit(fault.AfterCommit)
 	return nil
 }
 
 // CommitRunResult persists a run-level transition with its events and decisions.
 func (s *Store) CommitRunResult(ctx context.Context, r domain.RunCommit) error {
+	fault.Hit(fault.BeforeCommit)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("commit run: begin: %w", err)
@@ -540,5 +548,6 @@ func (s *Store) CommitRunResult(ctx context.Context, r domain.RunCommit) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit run: commit: %w", err)
 	}
+	fault.Hit(fault.AfterCommit)
 	return nil
 }

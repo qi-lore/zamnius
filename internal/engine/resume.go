@@ -60,6 +60,7 @@ func (e *Engine) Resume(ctx context.Context, runID uuid.UUID, opts ResumeOptions
 		maxConcurrency: clampConcurrency(opts.MaxConcurrency),
 		kinds:          make(map[string]map[string]struct{}),
 		artifacts:      make(map[string][]domain.ArtifactRef),
+		recovered:      make(map[string]map[string]recoveredAttempt),
 	}
 	if err := session.refresh(ctx); err != nil {
 		return RunResult{RunID: run.ID, Status: run.Status, Err: err}, err

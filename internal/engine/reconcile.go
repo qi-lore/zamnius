@@ -9,10 +9,11 @@ import (
 	"github.com/hIMEI29A/zamnius/internal/domain"
 )
 
-// reconcileAttempts repairs the one state a crash can leave behind: an attempt
-// that started and never committed an outcome. It is marked abandoned with the
-// restart cause recorded, so the audit can explain why a second attempt exists
-// (data-model.md §4 invariant 2, FR-063).
+// reconcileAttempts repairs the two states a crash can leave behind. An attempt
+// that started and never committed an outcome is marked abandoned with the restart
+// cause recorded. An attempt that did commit a success is remembered, so the run
+// reuses its result instead of executing the step again (data-model.md §4
+// invariant 2, FR-013, FR-063).
 func (s *session) reconcileAttempts(ctx context.Context, events []domain.Event) error {
 	for _, phase := range s.def.Phases {
 		attempts, err := s.engine.store.Attempts(ctx, s.run.ID, phase.Name)
@@ -20,6 +21,10 @@ func (s *session) reconcileAttempts(ctx context.Context, events []domain.Event) 
 			return err
 		}
 		for _, attempt := range attempts {
+			if attempt.Status == domain.AttemptSucceeded {
+				s.recordRecovered(phase.Name, attempt)
+				continue
+			}
 			if attempt.Status != domain.AttemptRunning {
 				continue
 			}
