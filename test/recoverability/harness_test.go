@@ -93,6 +93,13 @@ type fixture struct {
 // is what makes the process-death test prove the production wiring crosses a real
 // process boundary.
 func newInstance(dir, owner string, model engine.Model, ids func() uuid.UUID) (*fixture, error) {
+	return newInstanceWith(dir, owner, model, ids, nil)
+}
+
+// newInstanceWith is newInstance with an optional store decorator. The decorator
+// wraps the durable store the engine sees, which is how a test observes or forces
+// a lease renewal without changing production wiring (T048).
+func newInstanceWith(dir, owner string, model engine.Model, ids func() uuid.UUID, decorate func(engine.Store) engine.Store) (*fixture, error) {
 	layout := fakes.StateLayout(dir)
 	store, err := sqlite.Open(context.Background(), layout.Database)
 	if err != nil {
@@ -105,8 +112,13 @@ func newInstance(dir, owner string, model engine.Model, ids func() uuid.UUID) (*
 		return nil, fmt.Errorf("open artifact store: %w", err)
 	}
 
+	var storePort engine.Store = store
+	if decorate != nil {
+		storePort = decorate(store)
+	}
+
 	eng, err := engine.New(engine.Options{
-		Store:     store,
+		Store:     storePort,
 		Artifacts: artifactStore,
 		Models:    registry{client: model},
 		Clock:     fakes.NewClock(time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC), time.Millisecond).Now,

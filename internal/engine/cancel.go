@@ -9,8 +9,13 @@ import (
 
 // pause stops the run in a resumable state. The commit runs on a context that is
 // independent of the cancelled caller, because the reason for stopping must still
-// be recorded (FR-008).
+// be recorded (FR-008). When the stop was caused by a lost lease, that cause is
+// recorded instead of a generic cancellation, so an operator can tell the two
+// apart (T048, ADR-0004).
 func (s *session) pause(ctx context.Context, reason string) (RunResult, error) {
+	if cause := s.leaseLossCause(); cause != nil {
+		return s.pauseWithCause(ctx, "lease renewal failed: ownership of the run was lost", cause)
+	}
 	return s.pauseWithCause(ctx, reason, context.Canceled)
 }
 

@@ -408,9 +408,20 @@ type session struct {
 	engine         *Engine
 	run            domain.Run
 	def            definition.Definition
-	lease          domain.Lease
 	observer       Observer
 	maxConcurrency int
+
+	// lease is the current ownership claim. The heartbeat goroutine renews it while
+	// the drive loop runs, so every access goes through leaseMu (T048, ADR-0004).
+	leaseMu sync.Mutex
+	lease   domain.Lease
+	// leaseLost records why ownership was lost when a renewal failed. The drive loop
+	// reads it to pause with the real cause instead of a generic cancellation.
+	leaseLost error
+	// stopHeartbeat stops the renewal goroutine and waits for it to exit. It is set
+	// by drive and is idempotent, so releaseLease and the deferred stop can both call
+	// it without racing a renewal against the release.
+	stopHeartbeat func()
 
 	// attemptNo allocates 1-based attempt numbers per phase. Fan-out branches
 	// allocate concurrently, and attempt_no is unique per (run, phase), so the
@@ -442,6 +453,12 @@ type session struct {
 // drive walks the declared phase order. Order, not concurrency, is the contract
 // for phases; branches are the only parallel dimension (FR-002).
 func (s *session) drive(ctx context.Context) (RunResult, error) {
+	// The heartbeat renews the lease while phases run, so a phase longer than the
+	// TTL cannot let ownership lapse mid-work (T048, ADR-0004). It cancels ctx on a
+	// failed renewal, which stops the loop below and pauses with the recorded cause.
+	ctx, stop := s.startHeartbeat(ctx)
+	defer stop()
+
 	phases, err := s.engine.store.Phases(ctx, s.run.ID)
 	if err != nil {
 		return s.result(err), err
@@ -469,14 +486,6 @@ func (s *session) drive(ctx context.Context) (RunResult, error) {
 				return s.result(err), err
 			}
 			continue
-		}
-
-		if s.lease.ExpiresAt.Sub(s.engine.now()) < s.engine.leaseTTL/3 {
-			renewed, err := s.engine.renewLease(ctx, s.lease)
-			if err != nil {
-				return s.pauseWithCause(ctx, "lease renewal failed before phase "+phase.Name, err)
-			}
-			s.lease = renewed
 		}
 
 		if s.observer != nil {
@@ -509,6 +518,12 @@ func (s *session) drive(ctx context.Context) (RunResult, error) {
 		for _, updated := range refreshed {
 			stateOf[updated.Name] = updated
 		}
+	}
+
+	// Ownership lost while the last phase ran: the run must pause, not claim success
+	// it may no longer be entitled to write (ADR-0004).
+	if cause := s.leaseLossCause(); cause != nil {
+		return s.pauseWithCause(ctx, "lease renewal failed: ownership of the run was lost", cause)
 	}
 
 	reason := "all phases reached a terminal state"
