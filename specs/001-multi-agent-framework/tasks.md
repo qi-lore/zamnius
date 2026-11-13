@@ -131,9 +131,9 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 - [X] T046 [US2] Implement the resume protocol of [contracts/store.md](contracts/store.md) §5 — load the run, verify `definition_fingerprint` and `schema_version`, acquire the lease, reconcile events after the last committed position, verify the run's event chain, then continue from the current position — in `internal/engine/resume.go`, returning a terminal-or-paused state with a recorded reason on any failure instead of proceeding on partial knowledge
 - [X] T047 [US2] Implement attempt reconciliation — an attempt with no committed outcome is marked `abandoned` with `restarted_from` and a restart cause, restarted from the phase's recorded inputs with a fresh `attempt_no`, a `resume_restart` decision record, and idempotency keys on side-effecting actions so a recorded side effect is never repeated (FR-063, US2 scenario 7) — in `internal/engine/reconcile.go`
 - [X] T048 [US2] Implement the lease heartbeat — 30s default TTL, renewal at TTL/3, renewal failure demoting the run to `paused` with the cause recorded rather than continuing to write — in `internal/engine/lease.go`
-- [ ] T049 [US2] Implement the definition-drift guard — refuse to resume when the supplied fingerprint differs, name the expected and supplied fingerprints, and record the `--allow-definition-drift` override as a decision, in `internal/engine/drift.go`
+- [X] T049 [US2] Implement the definition-drift guard — refuse to resume when the supplied fingerprint differs, name the expected and supplied fingerprints, and record the `--allow-definition-drift` override as a decision, in `internal/engine/drift.go`
 - [ ] T050 [US2] Implement schema version handling — a newer binary resuming older state either runs a recorded migration writing `state.migrated`, or refuses with `state.migration_refused` and an actionable message; never a best-effort interpretation (FR-017) — in `internal/store/sqlite/version.go`
-- [ ] T051 [US2] Implement the `run resume` command — resuming `paused`/`pending`/runs with an expired lease, exit `4` naming the live owner and lease expiry, exit `0` with "already complete" and no work for a terminal run, `--allow-definition-drift` passthrough, and the same JSON envelope — in `internal/cli/resume.go`, wired from `internal/cli/cli.go`
+- [ ] T051 [US2] Implement the `run resume` command — resuming `paused`/`pending`/runs with an expired lease, exit `4` naming the live owner and lease expiry, exit `0` with "already complete" and no work for a terminal run, `--file` (supplied definition) and `--allow-definition-drift` passthrough, and the same JSON envelope — in `internal/cli/resume.go`, wired from `internal/cli/cli.go`
 - [ ] T052 [US2] Implement signal handling in `cmd/zamnius/main.go` — SIGINT/SIGTERM cancels the context so the engine commits the current attempt boundary, releases the lease, and leaves the run `paused`, exiting `7`; a second signal exits immediately with `1` and the run stays resumable ([contracts/cli.md](contracts/cli.md) §3)
 - [ ] T053 [US2] Implement the pause/resume persistence path — `run.paused` and `run.resumed` events committed with the status change and the `current_phase` update, with `Status` reporting the paused position and the next expected action, in `internal/store/sqlite/pause.go`
 
@@ -352,12 +352,9 @@ starting the next task. Never batch several tasks into one turn or one commit.
     `internal/store/sqlite/lease_test.go` (fails on the deferred DSN, passes immediate), and
     recorded in [ADR-0009](../../docs/domain_knowledge/adr/0009-sqlite-immediate-transactions.md).
     The fix is a store change, not a T045 change, so it lands in its own commit.
-  - **Semantic gap carried forward**: `Engine.Resume` derives the definition to execute from the
-    run's stored snapshot and takes no definition argument, so the drift guard it runs is reachable
-    only when the record is internally inconsistent. The spec's "definition supplied at resume"
-    (data-model.md §10) implies the caller may hand a different definition; T049/T051 must decide
-    whether `ResumeOptions` gains a `Definition`, and the test above will then be extended to that
-    path.
+  - **Semantic gap closed by T049**: `Resume` now takes an optional supplied definition
+    (`ResumeOptions.Definition`), so the drift guard is reachable on the operator's file rather than
+    only on an internally inconsistent record. `Engine.Resume` still executes the stored snapshot.
 - **T047** Attempt reconciliation — `test/recoverability/reconcile_test.go`, three cases:
   - **Crash restart links the replacement** — an attempt was `running` when the process died; resume
     marks it `abandoned` and the restarted attempt carries `restarted_from` naming it, with a fresh
@@ -400,12 +397,36 @@ starting the next task. Never batch several tasks into one turn or one commit.
   - **Non-vacuousness by mutation**: making the heartbeat body a no-op fails the cadence test
     (renewed 0 times) and times out the failure test; removing the `recordLeaseLoss`/`cancel` on a
     failed renewal times out the failure test.
+- **T049** Definition-drift guard — `internal/engine/drift.go`, covered by
+  `test/recoverability/drift_test.go` (three cases) plus the two T045 cases:
+  - **A supplied definition that differs is refused** — a run recorded from a two-phase workflow,
+    resumed with a caller-supplied three-phase workflow, returns `ErrDefinitionDrift`; the hint
+    names the recorded fingerprint, the supplied fingerprint, and `--allow-definition-drift`; no
+    events are appended and the run stays `pending`.
+  - **The override records the drift and still finishes the recorded workflow** — with
+    `AllowDefinitionDrift` the run succeeds, executes exactly the recorded phases (`draft`,
+    `review`), never calls the model for the supplied definition's extra `publish` phase, and
+    records exactly one override decision whose rationale and evidence carry both fingerprints.
+  - **A supplied definition that matches is accepted silently** — a fresh build of the same workflow
+    resumes normally and records no drift override.
+  - **Decision**: `ResumeOptions` gained `Definition *Definition` (nil = resume from the snapshot
+    alone, so FR-012 still holds), and `contracts/library-api.md` §2 and `contracts/cli.md` §1 were
+    updated. The engine always **executes the stored snapshot**: committed phases were recorded
+    against it, so a different definition cannot be adopted mid-run; the supplied definition is an
+    intent check, and the override records that the operator knowingly proceeded. `run resume
+    --file <path>` is the CLI half, wired in T051.
+  - **Ordering**: the refusal is decided before anything is written (contract: a refused resume
+    touches nothing), and the override decision is now recorded only **after** the lease is
+    acquired, so a process that does not own the run can never append to its history; if the
+    override cannot be committed, the lease is released rather than held.
+  - **Non-vacuousness by mutation**: making `compareDefinitions` ignore the supplied definition
+    passes the drifted definition to execution, so the refusal test fails (`error = <nil>`) and the
+    override test records 0 decisions.
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-- **T049** Definition-drift guard — `internal/engine/drift.go`: refuses a fingerprint mismatch,
-  naming both fingerprints, and records the `--allow-definition-drift` override as a decision. Its
-  reachable behaviour is now covered by T045; the "supplied definition" question above remains.
+Nothing outstanding: T049 was the last entry and is now covered by `test/recoverability/drift_test.go`.
+
 
 ### Not started
 
@@ -413,9 +434,10 @@ starting the next task. Never batch several tasks into one turn or one commit.
   `CheckRunVersion` currently lives in `internal/store/sqlite/migrate.go`; the task's named file
   and the `state.migrated` / `state.migration_refused` behaviour are not in place.
 - **T051** `run resume` command — implemented as `runner.runResume` in `internal/cli/run.go`
-  (exit 4 via `ErrRunAlreadyOwned`, terminal no-op via `alreadyComplete`, drift passthrough, the
-  same JSON envelope). The task requires it in `internal/cli/resume.go`; the file move and its
-  golden tests are pending.
+  (exit 4 via `ErrRunAlreadyOwned`, terminal no-op via `alreadyComplete`, drift passthrough via
+  `--allow-definition-drift`, the same JSON envelope). The task requires it in
+  `internal/cli/resume.go` plus the `--file` (supplied definition) passthrough that T049 added to
+  the library; the file move, the flag, and its golden tests are pending.
 - **T052** Signal handling — `cmd/zamnius/main.go` passes `context.Background()`; no
   SIGINT/SIGTERM binding yet.
 - **T053** Pause/resume persistence — `run.paused` is emitted from the engine cancel path
@@ -441,8 +463,7 @@ starting the next task. Never batch several tasks into one turn or one commit.
 
 - `quickstart.md` scenario 1 runs `ls /tmp/zq1/runs`, which does not match the real state layout;
   fix it when the scenarios are validated in T068.
-- `Engine.Resume` takes no definition, so the drift guard compares the stored snapshot against the
-  run's recorded fingerprint and cannot see a workflow the operator edited between start and
-  resume. Decide in T049/T051 whether `ResumeOptions` gains a `Definition` (see T045 above).
+- `Engine.Resume` now accepts an optional supplied definition (T049), but `run resume` does not yet
+  expose `--file`; wire it in T051 and extend the CLI golden tests.
 - `AGENTS.md`'s ADR range and `plan.md` line 225 still say `0001–0007`; update them if the range is
   load-bearing (AGENTS.md was updated to `0001–0009` this session).
