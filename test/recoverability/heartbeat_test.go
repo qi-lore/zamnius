@@ -184,6 +184,80 @@ func TestLeaseRenewalFailurePausesRun(t *testing.T) {
 	}
 }
 
+// TestLeaseLossDuringAPhaseReadPausesTheRun proves a lost lease is turned into a
+// pause even when it strikes before any phase has started. The heartbeat cancels the
+// run context while the drive loop is still reading phase state, so that read fails
+// with the cancellation; the run must be left paused with the lease cause recorded,
+// never returned as a "running" error for an operator to misread (T048, ADR-0004,
+// FR-008).
+func TestLeaseLossDuringAPhaseReadPausesTheRun(t *testing.T) {
+	dir := t.TempDir()
+	spy := &renewSpy{fail: domain.ErrRunAlreadyOwned}
+	stalled := &stalledPhases{Store: spy}
+	f, err := newInstanceWith(dir, "owner-read-race", &answerer{}, fakes.NewIDSource(),
+		func(store engine.Store) engine.Store { spy.Store = store; return stalled })
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	t.Cleanup(func() { _ = f.store.Close() })
+
+	// The first phase read happens inside drive, after the heartbeat is running, so
+	// holding it until the context is cancelled reproduces the window exactly.
+	stalled.stallNext()
+
+	result, err := f.engine.Start(context.Background(), singlePhaseDefinition(t), engine.StartOptions{})
+	if err == nil {
+		t.Fatal("Start() error = nil, want a pause after the lease was lost")
+	}
+	if class := domain.ClassOf(err); class != domain.ErrClassCancelled {
+		t.Errorf("error class = %q, want cancelled: a lost lease pauses the run", class)
+	}
+	if result.Status != domain.RunPaused {
+		t.Fatalf("status = %q, want paused", result.Status)
+	}
+
+	run, loadErr := f.store.LoadRun(context.Background(), result.RunID)
+	if loadErr != nil {
+		t.Fatalf("LoadRun() error = %v", loadErr)
+	}
+	if run.Status != domain.RunPaused {
+		t.Errorf("stored status = %q, want paused", run.Status)
+	}
+	if reason := pauseReason(t, f, result.RunID); !strings.Contains(strings.ToLower(reason), "lease") {
+		t.Errorf("run.paused reason = %q, want it to name the lease renewal failure", reason)
+	}
+}
+
+// stalledPhases holds the run's next phase read until the heartbeat cancels the run
+// context, which is what makes the cancellation reach a state read rather than a
+// phase. It is armed per call so the harness can say exactly which read stalls.
+type stalledPhases struct {
+	engine.Store
+	mu    sync.Mutex
+	stall bool
+}
+
+func (s *stalledPhases) stallNext() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stall = true
+}
+
+func (s *stalledPhases) Phases(ctx context.Context, runID uuid.UUID) ([]domain.PhaseState, error) {
+	s.mu.Lock()
+	stall := s.stall
+	s.stall = false
+	s.mu.Unlock()
+
+	if stall {
+		select {
+		case <-ctx.Done():
+		case <-time.After(2 * time.Second):
+		}
+	}
+	return s.Store.Phases(ctx, runID)
+}
+
 // pauseReason returns the reason recorded on the run's run.paused event.
 func pauseReason(t *testing.T, f *fixture, runID uuid.UUID) string {
 	t.Helper()

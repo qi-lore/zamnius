@@ -465,6 +465,23 @@ func (s *session) drive(ctx context.Context) (RunResult, error) {
 	ctx, stop := s.startHeartbeat(ctx)
 	defer stop()
 
+	result, err := s.walk(ctx)
+	// A step that failed because the run's context ended under it is an interruption,
+	// not a failure: either the caller stopped the run or the heartbeat stopped it
+	// after a lost lease. The run is owed a pause with that cause recorded, rather
+	// than an error returned against a status that still says `running` (FR-008,
+	// ADR-0004). A walk that already paused left the run non-running, so it is
+	// returned as it is.
+	if err != nil && ctx.Err() != nil && s.status() == domain.RunRunning {
+		return s.pause(ctx, "context ended while the run was working")
+	}
+	return result, err
+}
+
+// walk executes the declared phases and returns the result of the terminal, paused,
+// or successful path it took. It is separated from drive so that a step failing
+// because the run's context ended can still be turned into a pause.
+func (s *session) walk(ctx context.Context) (RunResult, error) {
 	phases, err := s.engine.store.Phases(ctx, s.run.ID)
 	if err != nil {
 		return s.result(err), err
@@ -547,6 +564,14 @@ func (s *session) drive(ctx context.Context) (RunResult, error) {
 	result.Status = domain.RunSucceeded
 	s.engine.logger.Info("run finished", "run_id", s.run.ID.String(), "status", string(result.Status))
 	return result, nil
+}
+
+// status reports the durable run status this session last read. It is guarded by the
+// session lock because concurrent branch commits refresh the same field.
+func (s *session) status() domain.RunStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.run.Status
 }
 
 // conditionHolds evaluates a when-condition against already-recorded outcomes.
