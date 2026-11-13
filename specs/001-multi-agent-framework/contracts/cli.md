@@ -13,7 +13,7 @@ shape and is the only form tests assert against.
 
 ```text
 zamnius run start   --file <path> [--state-dir <dir>] [--json]
-zamnius run resume  <run-id> [--state-dir <dir>] [--allow-definition-drift] [--json]
+zamnius run resume  <run-id> [--file <path>] [--state-dir <dir>] [--allow-definition-drift] [--json]
 zamnius run status  <run-id> [--state-dir <dir>] [--json]
 zamnius run artifacts <run-id> [--state-dir <dir>] [--out <dir>] [--json]
 zamnius version
@@ -43,6 +43,10 @@ Resumes a run that is `paused`, `pending`, or `running` with an expired lease.
 
 - If another live process owns the run: exit code `4`, message names the owner and lease expiry.
 - If the run is already terminal: exit `0`, prints that it is already complete, executes nothing (FR-018).
+- `--file` supplies the workflow the run was started from. It is optional: without it the run resumes
+  from its stored snapshot alone. With it, a fingerprint that differs from the run's recorded one is
+  refused (exit `5`) with a hint naming both fingerprints; the engine finishes the recorded workflow
+  either way, never the supplied one.
 - `--allow-definition-drift` permits resuming when the supplied definition fingerprint differs; the
   override is recorded as a decision (`failure_policy`-class `resume_restart` variant).
 

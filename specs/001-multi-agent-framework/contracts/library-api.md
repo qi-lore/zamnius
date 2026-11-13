@@ -51,7 +51,15 @@ func (e *Engine) Artifacts(ctx context.Context, runID uuid.UUID) ([]ArtifactRef,
 func (e *Engine) Verify(ctx context.Context, runID uuid.UUID) (VerifyReport, error)
 ```
 
-`StartOptions` / `ResumeOptions`: `AllowDefinitionDrift bool`, `MaxConcurrency int`, `Observer Observer`.
+`StartOptions`: `AllowDefinitionDrift bool`, `MaxConcurrency int`, `Observer Observer`.
+
+`ResumeOptions`: `Definition *Definition`, `AllowDefinitionDrift bool`, `MaxConcurrency int`, `Observer Observer`.
+`Definition` is optional and defaults to nil, which resumes from the stored snapshot alone (FR-012).
+When it is set, the engine compares its fingerprint with the run's recorded one and refuses a
+mismatch with `ErrDefinitionDrift` unless `AllowDefinitionDrift` is set; the override is recorded as a
+decision. The engine executes the stored snapshot either way, never the supplied workflow: committed
+phases were recorded against the snapshot, so a different definition cannot be adopted mid-run
+(data-model.md §10).
 
 `RunResult`: `{ RunID uuid.UUID, Status RunStatus, Phases []PhaseResult, Artifacts []ArtifactRef, Err error }`.
 A run that ends `failed` returns a non-nil `Err` **and** a populated `RunResult`, so callers never lose
