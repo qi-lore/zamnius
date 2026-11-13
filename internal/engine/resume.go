@@ -28,12 +28,13 @@ func (e *Engine) Resume(ctx context.Context, runID uuid.UUID, opts ResumeOptions
 		return RunResult{RunID: run.ID, Status: run.Status}, nil
 	}
 
-	if checker, ok := e.store.(interface {
-		CheckRunVersion(ctx context.Context, run domain.Run) error
-	}); ok {
-		if err := checker.CheckRunVersion(ctx, run); err != nil {
-			return RunResult{RunID: run.ID, Status: run.Status, Err: err}, err
-		}
+	// Schema version first: it decides whether this build may interpret the record
+	// at all. Older state was migrated when the store opened and is recorded on the
+	// run; newer state is refused, never guessed at (FR-017, data-model.md §10).
+	schema, err := e.checkRunSchema(ctx, run)
+	if err != nil {
+		e.recordMigrationRefusal(ctx, run, schema, err)
+		return RunResult{RunID: run.ID, Status: run.Status, Err: err}, err
 	}
 
 	def, err := definition.FromSnapshot(run.DefinitionJSON)
@@ -70,6 +71,19 @@ func (e *Engine) Resume(ctx context.Context, runID uuid.UUID, opts ResumeOptions
 			}
 			return RunResult{RunID: run.ID, Status: run.Status, Err: err}, err
 		}
+	}
+
+	if schema.Older() {
+		if err := e.recordRunMigration(ctx, run, schema); err != nil {
+			if releaseErr := e.store.ReleaseLease(ctx, lease); releaseErr != nil {
+				e.logger.Warn("could not release lease after an unrecorded migration",
+					"run_id", run.ID.String(), "error", releaseErr.Error())
+			}
+			return RunResult{RunID: run.ID, Status: run.Status, Err: err}, err
+		}
+		// The row now conforms to the store's schema, so a later resume records no
+		// second migration.
+		run.SchemaVersion = schema.StoreVersion
 	}
 
 	session := &session{
@@ -122,6 +136,78 @@ func (e *Engine) Resume(ctx context.Context, runID uuid.UUID, opts ResumeOptions
 	e.logger.Info("run resumed", "run_id", run.ID.String(), "from", string(run.Status))
 
 	return session.drive(ctx)
+}
+
+// checkRunSchema reports how the run's recorded schema compares with the store's.
+// Stores that do not report a version cannot be compared, so nothing is migrated or
+// refused on their behalf.
+func (e *Engine) checkRunSchema(ctx context.Context, run domain.Run) (domain.RunSchemaStatus, error) {
+	checker, ok := e.store.(interface {
+		CheckRunVersion(ctx context.Context, run domain.Run) (domain.RunSchemaStatus, error)
+	})
+	if !ok {
+		return domain.RunSchemaStatus{RunVersion: run.SchemaVersion, StoreVersion: run.SchemaVersion}, nil
+	}
+	return checker.CheckRunVersion(ctx, run)
+}
+
+// recordRunMigration writes the migration fact on the run and brings its row up to
+// the store's schema in the same transaction. The bump is what makes the event
+// once-only: a later resume sees matching versions and records nothing (FR-011).
+func (e *Engine) recordRunMigration(ctx context.Context, run domain.Run, status domain.RunSchemaStatus) error {
+	err := e.store.CommitRunResult(ctx, domain.RunCommit{
+		RunID: run.ID,
+		Delta: domain.RunDelta{SchemaVersion: status.StoreVersion},
+		Events: []domain.EventDraft{{
+			Type:  domain.EventStateMigrated,
+			Actor: domain.ActorSystem,
+			Payload: map[string]any{
+				"from_schema_version": status.RunVersion,
+				"to_schema_version":   status.StoreVersion,
+			},
+		}},
+	})
+	if err != nil {
+		return err
+	}
+	e.logger.Info("run state migrated",
+		"run_id", run.ID.String(), "from_schema", status.RunVersion, "to_schema", status.StoreVersion)
+	return nil
+}
+
+// recordMigrationRefusal leaves the refusal in the run's history when the record can
+// be claimed: appending to a run's history requires ownership, so a process that
+// cannot take the lease leaves the record to its owner and refuses anyway. The
+// refusal the caller receives never depends on this succeeding.
+func (e *Engine) recordMigrationRefusal(ctx context.Context, run domain.Run, status domain.RunSchemaStatus, refusal error) {
+	lease, err := e.store.AcquireLease(ctx, run.ID, e.owner, e.leaseTTL)
+	if err != nil {
+		e.logger.Info("schema refusal not recorded: the run is owned",
+			"run_id", run.ID.String(), "error", err.Error())
+		return
+	}
+	defer func() {
+		if releaseErr := e.store.ReleaseLease(ctx, lease); releaseErr != nil {
+			e.logger.Warn("could not release lease after a schema refusal",
+				"run_id", run.ID.String(), "error", releaseErr.Error())
+		}
+	}()
+
+	if err := e.store.CommitRunResult(ctx, domain.RunCommit{
+		RunID: run.ID,
+		Events: []domain.EventDraft{{
+			Type:  domain.EventStateMigrationRefused,
+			Actor: domain.ActorSystem,
+			Payload: map[string]any{
+				"run_schema_version":   status.RunVersion,
+				"store_schema_version": status.StoreVersion,
+				"message":              refusal.Error(),
+			},
+		}},
+	}); err != nil {
+		e.logger.Warn("could not record a schema refusal",
+			"run_id", run.ID.String(), "error", err.Error())
+	}
 }
 
 // nextPhaseName reports the phase the resumed run will work on next, for the

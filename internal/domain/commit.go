@@ -27,6 +27,10 @@ type RunDelta struct {
 	CurrentPhase  *string
 	OutcomeReason *string
 	SpentDelta    Consumption
+	// SchemaVersion brings the row up to a migrated schema. Zero means unchanged;
+	// it travels with the state.migrated event so the row and its history cannot
+	// disagree about which format the run now conforms to (FR-011, FR-017).
+	SchemaVersion int
 }
 
 // AttemptCommit persists one attempt outcome: the attempt row, its artifacts,

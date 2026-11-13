@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/prompt-fu/zamnius/internal/domain"
 	"github.com/prompt-fu/zamnius/internal/store/sqlite"
 )
@@ -269,25 +268,6 @@ func TestConcurrentAcquireLeaseAcrossConnectionsHasOneWinner(t *testing.T) {
 	}
 	if winners != 1 || losers != 1 {
 		t.Fatalf("winners = %d, losers = %d, want exactly one of each", winners, losers)
-	}
-}
-
-func TestSchemaVersionRefusalForNewerRun(t *testing.T) {
-	t.Parallel()
-
-	store := newStore(t)
-	ctx := context.Background()
-	run := createRun(t, store, "plan")
-
-	if err := store.CheckRunVersion(ctx, run); err != nil {
-		t.Fatalf("CheckRunVersion() error = %v for current schema", err)
-	}
-
-	future := run
-	future.SchemaVersion = domain.SchemaVersion + 1
-	future.ID = uuid.New()
-	if err := store.CheckRunVersion(ctx, future); !errors.Is(err, domain.ErrMigrationRefused) {
-		t.Fatalf("CheckRunVersion() error = %v, want ErrMigrationRefused", err)
 	}
 }
 

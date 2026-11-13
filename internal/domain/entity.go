@@ -12,6 +12,22 @@ import (
 // different version must be migrated with a recorded migration or refused (FR-017).
 const SchemaVersion = 1
 
+// RunSchemaStatus is how a run's recorded schema version compares with the schema a
+// store has applied. The two directions are not symmetric: older state is migratable
+// and is recorded on the run, newer state cannot be interpreted by this build and is
+// refused (FR-017, data-model.md §10).
+type RunSchemaStatus struct {
+	RunVersion   int
+	StoreVersion int
+}
+
+// Older reports state written before this build's schema: the store has migrated it
+// and the run must record that fact.
+func (s RunSchemaStatus) Older() bool { return s.RunVersion < s.StoreVersion }
+
+// Newer reports state written by a later build, which this one must not read.
+func (s RunSchemaStatus) Newer() bool { return s.RunVersion > s.StoreVersion }
+
 // Consumption is the accumulated spend of a run, phase, or attempt. Tokens are
 // kept as integers because budgets are enforced on them exactly (FR-007).
 type Consumption struct {

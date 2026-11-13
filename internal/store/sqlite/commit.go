@@ -244,6 +244,10 @@ func applyRunDelta(ctx context.Context, tx *sql.Tx, runID uuid.UUID, expectedVer
 		sets = append(sets, "outcome_reason = ?")
 		args = append(args, *delta.OutcomeReason)
 	}
+	if delta.SchemaVersion > 0 {
+		sets = append(sets, "schema_version = ?")
+		args = append(args, delta.SchemaVersion)
+	}
 	args = append(args, runID.String())
 
 	query := "UPDATE runs SET " + joinComma(sets) + " WHERE id = ?"
