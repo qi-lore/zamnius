@@ -40,8 +40,17 @@ func (e *Engine) Resume(ctx context.Context, runID uuid.UUID, opts ResumeOptions
 	if err != nil {
 		return RunResult{RunID: run.ID, Status: run.Status, Err: err}, err
 	}
-	if err := e.checkDefinitionDrift(ctx, run, def, opts.AllowDefinitionDrift); err != nil {
+
+	// Drift is decided before anything is written, so a refused resume leaves the
+	// record untouched; the override is recorded only once this process holds the
+	// lease and is entitled to append to the run's history.
+	drift, err := compareDefinitions(run, def, opts.Definition)
+	if err != nil {
 		return RunResult{RunID: run.ID, Status: run.Status, Err: err}, err
+	}
+	if drift.drifted() && !opts.AllowDefinitionDrift {
+		refusal := refuseDefinitionDrift(run, drift)
+		return RunResult{RunID: run.ID, Status: run.Status, Err: refusal}, refusal
 	}
 
 	lease, err := e.store.AcquireLease(ctx, run.ID, e.owner, e.leaseTTL)
@@ -49,6 +58,18 @@ func (e *Engine) Resume(ctx context.Context, runID uuid.UUID, opts ResumeOptions
 		// Someone else owns the run right now: the caller needs the live owner and
 		// expiry to decide whether to wait (T051).
 		return RunResult{RunID: run.ID, Status: run.Status, Err: err}, err
+	}
+
+	if drift.drifted() {
+		if err := e.recordDefinitionDriftOverride(ctx, run, drift); err != nil {
+			// Owning a run this process is not about to advance would block the
+			// operator it just refused, so ownership is given back.
+			if releaseErr := e.store.ReleaseLease(ctx, lease); releaseErr != nil {
+				e.logger.Warn("could not release lease after an unrecorded drift override",
+					"run_id", run.ID.String(), "error", releaseErr.Error())
+			}
+			return RunResult{RunID: run.ID, Status: run.Status, Err: err}, err
+		}
 	}
 
 	session := &session{

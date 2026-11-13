@@ -120,6 +120,12 @@ type StartOptions struct {
 
 // ResumeOptions govern one Resume call.
 type ResumeOptions struct {
+	// Definition is the workflow the caller believes the run is executing, usually a
+	// fresh parse of the file it was started from. When non-nil it is compared with
+	// the run's recorded fingerprint, so an operator editing the file learns that the
+	// run has drifted; when nil the run resumes from its stored snapshot alone
+	// (FR-012). Either way the engine executes the snapshot, never a replacement.
+	Definition           *definition.Definition
 	AllowDefinitionDrift bool
 	MaxConcurrency       int
 	Observer             Observer
