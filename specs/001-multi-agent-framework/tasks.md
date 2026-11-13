@@ -132,7 +132,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 - [X] T047 [US2] Implement attempt reconciliation — an attempt with no committed outcome is marked `abandoned` with `restarted_from` and a restart cause, restarted from the phase's recorded inputs with a fresh `attempt_no`, a `resume_restart` decision record, and idempotency keys on side-effecting actions so a recorded side effect is never repeated (FR-063, US2 scenario 7) — in `internal/engine/reconcile.go`
 - [X] T048 [US2] Implement the lease heartbeat — 30s default TTL, renewal at TTL/3, renewal failure demoting the run to `paused` with the cause recorded rather than continuing to write — in `internal/engine/lease.go`
 - [X] T049 [US2] Implement the definition-drift guard — refuse to resume when the supplied fingerprint differs, name the expected and supplied fingerprints, and record the `--allow-definition-drift` override as a decision, in `internal/engine/drift.go`
-- [ ] T050 [US2] Implement schema version handling — a newer binary resuming older state either runs a recorded migration writing `state.migrated`, or refuses with `state.migration_refused` and an actionable message; never a best-effort interpretation (FR-017) — in `internal/store/sqlite/version.go`
+- [X] T050 [US2] Implement schema version handling — a newer binary resuming older state either runs a recorded migration writing `state.migrated`, or refuses with `state.migration_refused` and an actionable message; never a best-effort interpretation (FR-017) — in `internal/store/sqlite/version.go`
 - [ ] T051 [US2] Implement the `run resume` command — resuming `paused`/`pending`/runs with an expired lease, exit `4` naming the live owner and lease expiry, exit `0` with "already complete" and no work for a terminal run, `--file` (supplied definition) and `--allow-definition-drift` passthrough, and the same JSON envelope — in `internal/cli/resume.go`, wired from `internal/cli/cli.go`
 - [ ] T052 [US2] Implement signal handling in `cmd/zamnius/main.go` — SIGINT/SIGTERM cancels the context so the engine commits the current attempt boundary, releases the lease, and leaves the run `paused`, exiting `7`; a second signal exits immediately with `1` and the run stays resumable ([contracts/cli.md](contracts/cli.md) §3)
 - [ ] T053 [US2] Implement the pause/resume persistence path — `run.paused` and `run.resumed` events committed with the status change and the `current_phase` update, with `Status` reporting the paused position and the next expected action, in `internal/store/sqlite/pause.go`
@@ -397,6 +397,15 @@ starting the next task. Never batch several tasks into one turn or one commit.
   - **Non-vacuousness by mutation**: making the heartbeat body a no-op fails the cadence test
     (renewed 0 times) and times out the failure test; removing the `recordLeaseLoss`/`cancel` on a
     failed renewal times out the failure test.
+  - **Defect found and fixed while verifying T050**: a lost lease that struck *before* a phase
+    started escaped as a raw error against a status that still said `running`. The heartbeat
+    cancels the run context, and the drive loop's first `Phases` read then failed with
+    `context.Canceled`, which `drive` returned through `s.result(err)`. Found as a rare `-race`
+    flake (`heartbeat_test.go:167: status = "running", want paused`) and pinned deterministically by
+    `TestLeaseLossDuringAPhaseReadPausesTheRun`, which stalls the first phase read until the lost
+    lease cancels the context. Fixed by splitting the loop into `walk` and wrapping it in `drive`:
+    an error returned while `ctx.Err() != nil` and the run is still `running` becomes a pause that
+    names the lease. Its own commit, because it is a T048 defect, not a T050 change.
 - **T049** Definition-drift guard — `internal/engine/drift.go`, covered by
   `test/recoverability/drift_test.go` (three cases) plus the two T045 cases:
   - **A supplied definition that differs is refused** — a run recorded from a two-phase workflow,
@@ -422,22 +431,49 @@ starting the next task. Never batch several tasks into one turn or one commit.
   - **Non-vacuousness by mutation**: making `compareDefinitions` ignore the supplied definition
     passes the drifted definition to execution, so the refusal test fails (`error = <nil>`) and the
     override test records 0 decisions.
+- **T050** Schema-version handling — `internal/store/sqlite/version.go` (moved out of
+  `migrate.go`, which is deleted), covered by `test/recoverability/version_test.go`,
+  `internal/store/sqlite/version_test.go`, and `internal/store/sqlite/version_internal_test.go`:
+  - **Older state is migrated and the migration is recorded once** — a run whose recorded
+    `schema_version` is older than the store's resumes to success, records exactly one
+    `state.migrated` (`{from_schema_version, to_schema_version}`), and the same commit brings
+    `runs.schema_version` up to the store's, so a later resume finds no gap.
+  - **Newer state is refused with evidence** — a run recorded under a newer schema returns
+    `ErrMigrationRefused` with a hint naming the schema the operator must upgrade to; exactly one
+    `state.migration_refused` (`{run_schema_version, store_schema_version, message}`) is recorded,
+    the run stays `pending`, and the lease taken to record it is released before the error is
+    returned (proved by acquiring it again afterwards).
+  - **Store-level matrix** — `CheckRunVersion` reports equal/older/newer as
+    `domain.RunSchemaStatus`, refuses only the newer direction, and `Open` refuses a database whose
+    highest applied migration is newer than the build.
+  - **Migration machinery** — `TestMigrateAppliesAndRecordsAPendingMigration` appends a migration
+    this build does not ship, opens, asserts the statements ran and were recorded once per version,
+    and reopens to prove nothing is replayed.
+  - **Design decisions**: `domain.RunSchemaStatus` (with `Older`/`Newer`) is the comparison both
+    layers share; `domain.RunDelta.SchemaVersion` (0 = unchanged) lets the row bump ride the same
+    transaction as the event (FR-011); the events are run-scoped because the event table requires a
+    `run_id`, so the engine records them under the lease; `shippedSchemaVersion()` reads the newest
+    entry of `migrations` instead of the `domain.SchemaVersion` constant (their equality is pinned
+    by `TestMigrationsMatchTheBuildSchemaVersion`), which is what lets the migration list be
+    exercised with an artificial step; `migrate`'s refusal and `CheckRunVersion`'s refusal now
+    carry `domain.Error` hints, where before they were bare wrapped errors.
+  - **Non-vacuousness by mutation**: skipping the `schema.Older()` recording fails the migration
+    test (`state.migrated events = 0`); skipping `recordMigrationRefusal` fails the refusal test
+    (`state.migration_refused events = 0`).
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
 Nothing outstanding: T049 was the last entry and is now covered by `test/recoverability/drift_test.go`.
-
-
 ### Not started
 
-- **T050** Schema-version handling — `internal/store/sqlite/version.go` does not exist. A
-  `CheckRunVersion` currently lives in `internal/store/sqlite/migrate.go`; the task's named file
-  and the `state.migrated` / `state.migration_refused` behaviour are not in place.
 - **T051** `run resume` command — implemented as `runner.runResume` in `internal/cli/run.go`
   (exit 4 via `ErrRunAlreadyOwned`, terminal no-op via `alreadyComplete`, drift passthrough via
   `--allow-definition-drift`, the same JSON envelope). The task requires it in
   `internal/cli/resume.go` plus the `--file` (supplied definition) passthrough that T049 added to
   the library; the file move, the flag, and its golden tests are pending.
+  - **Carried in from T049/T050**: `exitCodeFor` maps neither `ErrDefinitionDrift` (contract says
+    exit `5`) nor `ErrMigrationRefused` (closest fit: exit `6`, a persistence failure). Both need a
+    mapping and a golden test in T051, which owns the command.
 - **T052** Signal handling — `cmd/zamnius/main.go` passes `context.Background()`; no
   SIGINT/SIGTERM binding yet.
 - **T053** Pause/resume persistence — `run.paused` is emitted from the engine cancel path
