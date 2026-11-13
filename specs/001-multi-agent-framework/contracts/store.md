@@ -205,7 +205,15 @@ type ArtifactStore interface {
 ## 5. Resume protocol
 
 ```text
-1. Load run. Verify fingerprint and schema_version.
+1. Load run. Verify fingerprint and schema_version. State written by an older schema was
+   migrated when the store opened; the run records that once, as `state.migrated`
+   (`{from_schema_version, to_schema_version}`) in the same transaction that brings its
+   `schema_version` up to the store's, so a later resume sees no gap. State written by a
+   newer schema is refused with `state.migration_refused`
+   (`{run_schema_version, store_schema_version, message}`) and an actionable message, and
+   never interpreted (FR-017). Both records are written under the run's lease: the
+   migration once ownership is taken and before execution continues, the refusal by
+   taking the lease, recording, and releasing it before the refusal is returned.
 2. Acquire lease.
 3. Read events after the last committed position and reconcile:
    - attempt with no committed outcome → mark abandoned, record restart cause, re-run from phase inputs
