@@ -33,12 +33,13 @@ alone (constitution Principle II).
 - Plan, research, data model, contracts, quickstart, and **`tasks.md`** are committed.
 - `tasks.md` holds **68 TDD tasks in six phases**: Setup T001–T005, Foundational T006–T019
   (blocks every story), US1 T020–T042, US2 T043–T053, US3 T054–T062, Polish T063–T068.
-- **Implementation is well under way: T001–T048 are done and tested, so US1 is complete, US2's
-  genuine-process-death, ownership/idempotence, attempt-reconciliation, and lease-heartbeat proofs
-  are in place, and T043–T048 are all committed. The next action is to resume US2 at T049**
-  (definition-drift guard: refuse a fingerprint mismatch, name both fingerprints, record the
-  `--allow-definition-drift` override). For the exact per-task state — done,
-  implemented-but-untested, or untouched — and the design decisions taken along the way, read
+- **Implementation is well under way: T001–T049 are done and tested, so US1 is complete, US2's
+  genuine-process-death, ownership/idempotence, attempt-reconciliation, lease-heartbeat, and
+  definition-drift proofs are in place, and T043–T049 are all committed. The next action is to
+  resume US2 at T050** (schema-version handling: a recorded migration writing `state.migrated`, or
+  a refusal writing `state.migration_refused`, never a best-effort interpretation). For the exact
+  per-task state — done, implemented-but-untested, or untouched — and the design decisions taken
+  along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
   boxes above it are updated.
 - Branch: `001-multi-agent-framework`, 86 commits above the initial commit `0a512c3`. Per the
