@@ -134,7 +134,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 - [X] T049 [US2] Implement the definition-drift guard — refuse to resume when the supplied fingerprint differs, name the expected and supplied fingerprints, and record the `--allow-definition-drift` override as a decision, in `internal/engine/drift.go`
 - [X] T050 [US2] Implement schema version handling — a newer binary resuming older state either runs a recorded migration writing `state.migrated`, or refuses with `state.migration_refused` and an actionable message; never a best-effort interpretation (FR-017) — in `internal/store/sqlite/version.go`
 - [X] T051 [US2] Implement the `run resume` command — resuming `paused`/`pending`/runs with an expired lease, exit `4` naming the live owner and lease expiry, exit `0` with "already complete" and no work for a terminal run, `--file` (supplied definition) and `--allow-definition-drift` passthrough, and the same JSON envelope — in `internal/cli/resume.go`, wired from `internal/cli/cli.go`
-- [ ] T052 [US2] Implement signal handling in `cmd/zamnius/main.go` — SIGINT/SIGTERM cancels the context so the engine commits the current attempt boundary, releases the lease, and leaves the run `paused`, exiting `7`; a second signal exits immediately with `1` and the run stays resumable ([contracts/cli.md](contracts/cli.md) §3)
+- [X] T052 [US2] Implement signal handling in `cmd/zamnius/main.go` — SIGINT/SIGTERM cancels the context so the engine commits the current attempt boundary, releases the lease, and leaves the run `paused`, exiting `7`; a second signal exits immediately with `1` and the run stays resumable ([contracts/cli.md](contracts/cli.md) §3)
 - [ ] T053 [US2] Implement the pause/resume persistence path — `run.paused` and `run.resumed` events committed with the status change and the `current_phase` update, with `Status` reporting the paused position and the next expected action, in `internal/store/sqlite/pause.go`
 
 **Checkpoint**: User Stories 1 and 2 both work independently; recovery is proven at four interruption points plus a real `SIGKILL`.
@@ -294,6 +294,8 @@ starting the next task. Never batch several tasks into one turn or one commit.
 - `CGO_ENABLED=0 go build ./...` passes.
 - `go test ./test/recoverability -run TestResumeAfterProcessKill -count=10` passes with no flakes; the
   SIGKILL harness is verified non-vacuous by mutation (see T044 below).
+- The T051 CLI suite and the T052 signal cases pass with `-count=5`; the SIGTERM subprocess case is
+  verified non-vacuous by mutation (see T052 below).
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -492,15 +494,49 @@ starting the next task. Never batch several tasks into one turn or one commit.
     and records 0 override decisions; removing the owner enrichment leaves the hint empty; bypassing
     the terminal pre-check fails the no-op test with the credential error; removing either exit mapping
     yields exit `1`.
+- **T052** Signal handling — `internal/cli/signal.go` (`RunWithSignals`, called by
+  `cmd/zamnius/main.go`), covered by `internal/cli/signal_internal_test.go` (two unit cases) and
+  `test/integration/signal_test.go` (one subprocess case):
+  - **A SIGTERM during a provider call pauses the run** — the parent re-executes this test binary as a
+    child, which binds its signals through `cli.RunWithSignals`; the child starts `run start` against a
+    provider that withholds its first answer, the parent waits for that call to arrive and then sends
+    SIGTERM. The child exits `7`, the durable status is `paused`, `run.paused` is in the log, and the
+    lease was **released** (proved by taking it again immediately); after the provider is released the
+    ordinary `run resume` finishes the run (contracts/cli.md §3, §5.4, FR-008).
+  - **One signal cancels the command context and returns exit `7`** — a unit case drives
+    `runWithSignals` with a scripted command that waits on its context, sends SIGTERM to the test
+    process, and asserts the command returns `ExitCancelled` without the immediate-exit path being
+    taken.
+  - **A second signal exits immediately with `1`** — a unit case blocks the scripted command *after*
+    its context ended, sends a second SIGTERM once the first has been delivered (so the kernel cannot
+    coalesce them), and asserts the injected exit receives `ExitError` while the command is still
+    unwinding.
+  - **Reporting survives the cancellation** — `runner.inspect` detaches to
+    `context.WithoutCancel` when the context has already ended, because the view read after a
+    signalled stop would otherwise fail with `context.Canceled` and downgrade the exit code from `7`
+    to `1`. Non-vacuousness: reverting that detachment fails the subprocess test with
+    `child exit = 1, want 7`.
+  - **Design decisions**: the binding lives in `internal/cli/signal.go` and `main.go` stays the one
+    line that binds args, streams, and signals, because package `main` cannot be imported by a test —
+    the shipped code path (`RunWithSignals`) is what the child executes, so nothing about the tested
+    path is a copy. `runWithSignals` takes the runner and the exit function as parameters so the
+    second-signal path is deterministic to test; the process-level version of that case is
+    inherently racy (the graceful pause commits in well under a millisecond, so the process usually
+    exits `7` before a second signal lands) and is therefore asserted at unit level instead. Two
+    registrations are deliberate: `signal.NotifyContext` carries the first signal to the work, and a
+    buffered channel counts signals for the second. The paused-then-resumed behaviour of a run killed
+    outright is already covered by T045 (lease takeover) and T047 (attempt reconciliation).
+  - **Non-vacuousness by mutation**: dropping the `NotifyContext` binding (keeping only the counting
+    channel) makes the child ignore the signal and the subprocess test times out; removing the
+    immediate exit leaves the second-signal unit case waiting; exiting on the first signal fails the
+    first-signal unit case.
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: T051 was the last entry and is now covered by
-`test/integration/resume_test.go`.
+Nothing outstanding: T052 was the last entry and is now covered by
+`internal/cli/signal_internal_test.go` and `test/integration/signal_test.go`.
 ### Not started
 
-- **T052** Signal handling — `cmd/zamnius/main.go` passes `context.Background()`; no
-  SIGINT/SIGTERM binding yet.
 - **T053** Pause/resume persistence — `run.paused` is emitted from the engine cancel path
   (`internal/engine/cancel.go`) and `run.resumed` from `internal/engine/resume.go`. The task's
   named file `internal/store/sqlite/pause.go` and the explicit `Status` fields are not in place.
