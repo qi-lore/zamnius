@@ -33,16 +33,15 @@ alone (constitution Principle II).
 - Plan, research, data model, contracts, quickstart, and **`tasks.md`** are committed.
 - `tasks.md` holds **68 TDD tasks in six phases**: Setup T001–T005, Foundational T006–T019
   (blocks every story), US1 T020–T042, US2 T043–T053, US3 T054–T062, Polish T063–T068.
-- **Implementation is well under way: T001–T052 are done and tested, so US1 is complete, US2's
-  genuine-process-death, ownership/idempotence, attempt-reconciliation, lease-heartbeat,
-  definition-drift, schema-version, and `run resume` proofs are in place, and T043–T052 are all
-  committed. The next action is to resume US2 at T053** (the pause/resume persistence path:
-  `run.paused` and `run.resumed` committed with the status change and the `current_phase` update,
-  with `Status` reporting the paused position and the next expected action, in
-  `internal/store/sqlite/pause.go`). For the exact per-task state — done, implemented-but-untested,
-  or untouched — and the design decisions taken along the way, read
-  `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
-  boxes above it are updated.
+- **Implementation is well under way: T001–T053 are done and tested, so US1 and US2 are both
+  complete** — the recoverability proofs (four commit-boundary interruption points, a genuine
+  `SIGKILL`, ownership/lease takeover, attempt reconciliation, lease heartbeat, definition-drift
+  refusal, schema-version migration/refusal, the `run resume` command, signal handling, and the
+  paused position) are all in place and committed. **The next action is to begin US3 at T054** (the
+  chain-integrity test in `test/audit/chain_test.go`, the first of US3's audit-reconstruction work).
+  For the exact per-task state — done, implemented-but-untested, or untouched — and the design
+  decisions taken along the way, read `tasks.md` → `## Implementation status (2026-11-12)`; that
+  section is authoritative until the boxes above it are updated.
 - Branch: `001-multi-agent-framework`, commits above the initial commit `0a512c3`. Per the
   constitution, feature branches target `dev`, not `main`. Working tree is clean; every commit is
   local.
@@ -123,7 +122,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.implement # implement the NEXT single unchecked task (now T053), verify it, then STOP and report for review
+/speckit.implement # implement the NEXT single unchecked task (now T054), verify it, then STOP and report for review
 /speckit.analyze   # cross-artifact consistency check
 ```
 
