@@ -133,7 +133,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 - [X] T048 [US2] Implement the lease heartbeat — 30s default TTL, renewal at TTL/3, renewal failure demoting the run to `paused` with the cause recorded rather than continuing to write — in `internal/engine/lease.go`
 - [X] T049 [US2] Implement the definition-drift guard — refuse to resume when the supplied fingerprint differs, name the expected and supplied fingerprints, and record the `--allow-definition-drift` override as a decision, in `internal/engine/drift.go`
 - [X] T050 [US2] Implement schema version handling — a newer binary resuming older state either runs a recorded migration writing `state.migrated`, or refuses with `state.migration_refused` and an actionable message; never a best-effort interpretation (FR-017) — in `internal/store/sqlite/version.go`
-- [ ] T051 [US2] Implement the `run resume` command — resuming `paused`/`pending`/runs with an expired lease, exit `4` naming the live owner and lease expiry, exit `0` with "already complete" and no work for a terminal run, `--file` (supplied definition) and `--allow-definition-drift` passthrough, and the same JSON envelope — in `internal/cli/resume.go`, wired from `internal/cli/cli.go`
+- [X] T051 [US2] Implement the `run resume` command — resuming `paused`/`pending`/runs with an expired lease, exit `4` naming the live owner and lease expiry, exit `0` with "already complete" and no work for a terminal run, `--file` (supplied definition) and `--allow-definition-drift` passthrough, and the same JSON envelope — in `internal/cli/resume.go`, wired from `internal/cli/cli.go`
 - [ ] T052 [US2] Implement signal handling in `cmd/zamnius/main.go` — SIGINT/SIGTERM cancels the context so the engine commits the current attempt boundary, releases the lease, and leaves the run `paused`, exiting `7`; a second signal exits immediately with `1` and the run stays resumable ([contracts/cli.md](contracts/cli.md) §3)
 - [ ] T053 [US2] Implement the pause/resume persistence path — `run.paused` and `run.resumed` events committed with the status change and the `current_phase` update, with `Status` reporting the paused position and the next expected action, in `internal/store/sqlite/pause.go`
 
@@ -460,20 +460,45 @@ starting the next task. Never batch several tasks into one turn or one commit.
   - **Non-vacuousness by mutation**: skipping the `schema.Older()` recording fails the migration
     test (`state.migrated events = 0`); skipping `recordMigrationRefusal` fails the refusal test
     (`state.migration_refused events = 0`).
+- **T051** `run resume` command — `internal/cli/resume.go` (moved out of `run.go`, wired from
+  `internal/cli/cli.go`), covered by `test/integration/resume_test.go` (eight cases):
+  - **A resumable run finishes** — a run left `pending` by an interrupted process resumes to success,
+    emits the same versioned envelope (`command: run.resume`), commits an artifact, and records
+    `run.resumed`.
+  - **A paused run continues from its position** — a genuinely interrupted run (the scripted model
+    reports `context.Canceled`, so the engine commits the attempt boundary and pauses) resumes to
+    success: the interrupted attempt stays `abandoned`, exactly one replacement attempt `succeeded`,
+    and `run.resumed` is recorded.
+  - **A terminal run is a no-op** — exit `0`, prints "already complete", appends no event, and still
+    succeeds with `ZAMNIUS_MODEL_API_KEY` removed, which proves the terminal check runs on the
+    inspection engine and executes no work (FR-018, contracts/cli.md §5.2).
+  - **A live owner is named** — exit `4`; the error hint names the owner and the lease expiry, the
+    `--json` run view carries `owner_id`, and nothing is appended. The position is re-read after the
+    refusal so the owner named is the one that refused the lease (FR-016, contracts/cli.md §5.3).
+  - **`--file` drift is refused** — exit `5`; the hint names the fingerprints and
+    `--allow-definition-drift`; no event is appended (FR-014).
+  - **`--allow-definition-drift` finishes the recorded workflow** — the run succeeds, only the
+    recorded `greet` phase executes (never the supplied fan-out's branches), and exactly one
+    `resume_restart` decision records the override.
+  - **A matching `--file` is silent** — the same workflow supplied by file resumes normally and
+    records no drift decision.
+  - **Newer state is refused with exit `6`** — the hint names the schema that wrote the run and the
+    run stays `pending` (FR-017).
+  - **Exit-code mapping** (carried in from T049/T050): `ErrDefinitionDrift` → exit `5` and
+    `ErrMigrationRefused` → exit `6`; both rows are clarified in `contracts/cli.md` §3.
+  - **Ordering**: the terminal check uses `composition.Inspector()`, so a run that needs no work never
+    requires a model credential; a supplied definition is parsed before the model adapter is built.
+  - **Non-vacuousness by mutation**: ignoring the supplied definition makes the drift refusal exit `0`
+    and records 0 override decisions; removing the owner enrichment leaves the hint empty; bypassing
+    the terminal pre-check fails the no-op test with the credential error; removing either exit mapping
+    yields exit `1`.
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: T049 was the last entry and is now covered by `test/recoverability/drift_test.go`.
+Nothing outstanding: T051 was the last entry and is now covered by
+`test/integration/resume_test.go`.
 ### Not started
 
-- **T051** `run resume` command — implemented as `runner.runResume` in `internal/cli/run.go`
-  (exit 4 via `ErrRunAlreadyOwned`, terminal no-op via `alreadyComplete`, drift passthrough via
-  `--allow-definition-drift`, the same JSON envelope). The task requires it in
-  `internal/cli/resume.go` plus the `--file` (supplied definition) passthrough that T049 added to
-  the library; the file move, the flag, and its golden tests are pending.
-  - **Carried in from T049/T050**: `exitCodeFor` maps neither `ErrDefinitionDrift` (contract says
-    exit `5`) nor `ErrMigrationRefused` (closest fit: exit `6`, a persistence failure). Both need a
-    mapping and a golden test in T051, which owns the command.
 - **T052** Signal handling — `cmd/zamnius/main.go` passes `context.Background()`; no
   SIGINT/SIGTERM binding yet.
 - **T053** Pause/resume persistence — `run.paused` is emitted from the engine cancel path
@@ -499,7 +524,5 @@ Nothing outstanding: T049 was the last entry and is now covered by `test/recover
 
 - `quickstart.md` scenario 1 runs `ls /tmp/zq1/runs`, which does not match the real state layout;
   fix it when the scenarios are validated in T068.
-- `Engine.Resume` now accepts an optional supplied definition (T049), but `run resume` does not yet
-  expose `--file`; wire it in T051 and extend the CLI golden tests.
 - `AGENTS.md`'s ADR range and `plan.md` line 225 still say `0001–0007`; update them if the range is
   load-bearing (AGENTS.md was updated to `0001–0009` this session).
