@@ -128,6 +128,11 @@ func TestCancellationPausesMidFanoutThenResumes(t *testing.T) {
 	if status.NextAction == "" {
 		t.Error("a paused run reports no next action")
 	}
+	// A pause mid-phase records the phase it interrupted as the resume position, so
+	// Status names where work stopped (T053).
+	if status.CurrentPhase == nil || *status.CurrentPhase != "draft" {
+		t.Errorf("paused current_phase = %v, want \"draft\"", status.CurrentPhase)
+	}
 
 	types := h.eventTypes(run.RunID)
 	if indexOfEvent(types, string(domain.EventRunPaused)) < 0 {

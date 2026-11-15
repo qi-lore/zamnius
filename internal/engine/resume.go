@@ -119,7 +119,7 @@ func (e *Engine) Resume(ctx context.Context, runID uuid.UUID, opts ResumeOptions
 		return session.result(err), err
 	}
 
-	position := session.nextPhaseName()
+	position := session.nextPhaseName(ctx)
 	reason := fmt.Sprintf("resumed from status %s", run.Status)
 	if err := session.commitRun(ctx, domain.RunDelta{Status: domain.RunRunning, CurrentPhase: position},
 		[]domain.EventDraft{{
@@ -210,10 +210,13 @@ func (e *Engine) recordMigrationRefusal(ctx context.Context, run domain.Run, sta
 	}
 }
 
-// nextPhaseName reports the phase the resumed run will work on next, for the
-// run.resumed payload and for status reporting.
-func (s *session) nextPhaseName() *string {
-	states, err := s.engine.store.Phases(context.WithoutCancel(context.Background()), s.run.ID)
+// nextPhaseName reports the phase a run will work on next: the first phase that
+// has not reached a terminal state, in declared order. It is the resume position
+// for both a paused run (the `current_phase` a pause records, T053) and a resumed
+// one (the `current_phase` a resume records), so one definition of "where work
+// stopped" serves both paths.
+func (s *session) nextPhaseName(ctx context.Context) *string {
+	states, err := s.engine.store.Phases(ctx, s.run.ID)
 	if err != nil {
 		return nil
 	}

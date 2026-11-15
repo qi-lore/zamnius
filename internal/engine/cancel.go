@@ -31,8 +31,16 @@ func (s *session) pauseWithCause(ctx context.Context, reason string, cause error
 		Actor:   domain.ActorSystem,
 		Payload: map[string]any{"reason": reason, "cause": causeOf(cause)},
 	}
-	if err := s.commitRun(commitCtx, domain.RunDelta{Status: domain.RunPaused, OutcomeReason: &reason},
-		[]domain.EventDraft{event}, nil, false); err != nil {
+	// The pause co-commits the position the run must resume from, so the run row
+	// names where work stopped rather than leaving `current_phase` pointing at a
+	// phase that already reached a terminal state. Status reads that row, so a
+	// reader with the store alone sees the paused position and the next action
+	// without replaying the event log (T053, FR-023).
+	if err := s.commitRun(commitCtx, domain.RunDelta{
+		Status:        domain.RunPaused,
+		OutcomeReason: &reason,
+		CurrentPhase:  s.nextPhaseName(commitCtx),
+	}, []domain.EventDraft{event}, nil, false); err != nil {
 		// The run could not be marked paused; report the original cause and let the
 		// lease expire rather than pretending the run reached a known state.
 		s.engine.logger.Error("could not record pause", "run_id", s.run.ID.String(), "error", err.Error())
