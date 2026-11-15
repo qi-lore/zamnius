@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"sync"
 
 	"golang.org/x/sync/errgroup"
 
@@ -26,7 +25,6 @@ func (s *session) runFanout(ctx context.Context, index int, phase definition.Pha
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(s.maxConcurrency)
 
-	var mu sync.Mutex
 	for i := range phase.Branches {
 		branch := phase.Branches[i]
 		// A branch whose attempt already succeeded is reused, not recomputed: the
@@ -45,9 +43,9 @@ func (s *session) runFanout(ctx context.Context, index int, phase definition.Pha
 			// waits for all of them even when one fails.
 			result := s.executeAttempts(groupCtx, index, phase, branch.Agent,
 				branchTimeout(branch, phase), budgetFor(phase, branch.Budget), branch.Name)
-			mu.Lock()
+			// Each goroutine writes its own index of a slice that is never
+			// reallocated, so these writes do not race and need no lock.
 			outcomes[i] = result
-			mu.Unlock()
 			return nil
 		})
 	}

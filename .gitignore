@@ -57,3 +57,6 @@ notes/
 
 # Local agent work plans (working docs, not durable knowledge)
 .opencode/plan/
+
+# ideas assessments
+.specify/assessments/
