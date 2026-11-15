@@ -149,7 +149,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 
 ### Tests for User Story 3 (write first, must fail) ⚠️
 
-- [ ] T054 [P] [US3] Write chain-integrity tests in `test/audit/chain_test.go`: verification over a clean run passes; a single mutated `payload`, `hash`, or `prev_hash` is detected at the correct `seq`; a deleted event is detected as a gap; `UPDATE`/`DELETE` on `events` is rejected at the schema level (US3 scenario 3)
+- [X] T054 [P] [US3] Write chain-integrity tests in `test/audit/chain_test.go` (with the shared `test/audit/harness_test.go`): verification over a clean run passes; a single mutated `payload`, `hash`, or `prev_hash` is detected at the correct `seq`; a deleted event is detected as a gap; `UPDATE`/`DELETE` on `events` is rejected at the schema level (US3 scenario 3)
 - [ ] T055 [P] [US3] Write artifact-integrity tests in `test/audit/artifact_test.go`: every referenced artifact verifies against its recorded `sha256` (US3 scenario 4); a corrupted file fails with exit `6` naming the file and expected digest; a row whose file is missing is an integrity failure and never triggers a silent re-run ([contracts/store.md](contracts/store.md) §5 step 3)
 - [ ] T056 [P] [US3] Write the audit completeness check in `test/audit/completeness_test.go` — every phase transition and every retry, escalation, budget stop, takeover, skip, and resume restart in the event log has a corresponding decision record whose `rationale` names the triggering condition, and every event carries an actor, timestamp, phase, and cause (SC-005, US3 scenarios 1 and 2)
 - [ ] T057 [P] [US3] Write the reconstruction test in `test/audit/reconstruct_test.go` — from the store alone, a reader derives current phase, completed branches, pending work, and next expected action for at least 20 sampled scenarios, including one paused mid-fan-out and one failed on an `all` join (SC-004, FR-023)
@@ -298,6 +298,8 @@ starting the next task. Never batch several tasks into one turn or one commit.
   verified non-vacuous by mutation (see T052 below).
 - The T053 pause-position test (`TestPauseRecordsTheResumePosition`) passes `-count=20` and under
   `-race` with no flakes; it is verified non-vacuous by mutation (see T053 below).
+- `test/audit` passes `-race -count=10`; the chain-integrity tests are verified non-vacuous by
+  mutation (see T054 below).
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -558,22 +560,48 @@ starting the next task. Never batch several tasks into one turn or one commit.
   - **Non-vacuousness by mutation**: removing `CurrentPhase: s.nextPhaseName(commitCtx)` from the
     pause delta fails the between-phase test (`paused current_phase = 0x…, want "second"`); the red
     state was confirmed this way before the fix, and the between-phase test passes `-count=20`.
+- **T054** Chain-integrity tests — `test/audit/chain_test.go` plus the shared
+  `test/audit/harness_test.go`. Every test name starts with `TestVerify`, so the quickstart's
+  `go test ./test/audit -run TestVerify` selects all four:
+  - **A clean run verifies** — a three-phase run (ordered → three-branch `all` fan-out → ordered)
+    is driven through a real store, artifact store, and engine; `audit.VerifyChain` reports no
+    problem, every event's `prev_hash` equals its predecessor's stored `hash` (the link is present,
+    not merely unchecked), and `Engine.Verify` returns an `OK` report with the event and artifact
+    counts.
+  - **A single tampered event is caught at its `seq`** — a table mutates one interior event's
+    `payload`, `hash`, or `prev_hash` and asserts `VerifyChain` reports a `chain` problem whose
+    `seq` is exactly the mutated one (with a non-empty detail), for all three fields.
+  - **A deleted event is a broken link** — removing an interior event makes its successor's
+    `prev_hash` point at a hash no surviving event carries, and the problem is reported at the
+    successor's `seq`.
+  - **The append-only rule holds at the schema level** — `UPDATE` and `DELETE` against `events`
+    both fail naming the `append-only` trigger, the event count is unchanged, and the record still
+    verifies afterwards (US3 scenario 3).
+  - **Design**: the tests read records a real run wrote — the fixture assembles the three
+    collaborators the composition root assembles, with a deterministic clock and id source — so a
+    defect in the writer or the reader surfaces here rather than being masked by hand-built rows.
+    The harness is shared with T055–T057, which extend it with their own workflows.
+  - **Non-vacuousness by mutation**: neutering `VerifyChain` to `return nil` fails the tamper table
+    (all three fields) and the deleted-event test; the clean-run and schema-level tests are
+    independent of that return, as they should be. The schema-level test is non-vacuous by
+    construction: it requires an error and asserts the message names the trigger.
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: T052 and T053 were the last entries, and both are now covered
-(`internal/cli/signal_internal_test.go` + `test/integration/signal_test.go` for T052;
-`test/integration/pause_test.go` + `test/integration/cancel_test.go` for T053).
+Nothing outstanding: the last entries — T052, T053, and T054 — are all covered.
 ### Not started
 
-- **T054–T062** US3 — untouched; only `internal/audit/verify.go` exists under `internal/audit`.
+- **T055–T062** US3 — the chain-integrity half of verification is done (T054). The
+  artifact-integrity suite, the completeness check, the reconstruction suite, the audit views,
+  streaming verification as `Engine.Verify`, the orphan-artifact sweep, and the integrity-facing
+  CLI behaviour remain.
 - **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
   `CHANGELOG.md` does not exist.
 
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
-migration/refusal, the `run resume` command, signal handling, and now the paused position. The next
-task is **T054**, the first of US3.
+migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
+under way: T054 (chain integrity) is done.** The next task is **T055**.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
