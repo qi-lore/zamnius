@@ -90,8 +90,8 @@ On failure, `ok` is `false` and `error` is `{ "class": "<ErrorClass or usage/con
 | `2` | Usage error (unknown flag, missing argument) |
 | `3` | Run reached `failed` |
 | `4` | Run is owned by another live process |
-| `5` | Definition or configuration invalid |
-| `6` | Persistence integrity failure (artifact fingerprint mismatch, broken event chain) |
+| `5` | Definition or configuration invalid, including a resume whose supplied definition has drifted |
+| `6` | Persistence integrity failure (artifact fingerprint mismatch, broken event chain), or state written by an incompatible schema this build refuses to migrate |
 | `7` | Cancelled by signal (SIGINT/SIGTERM) — run is left `paused`, resumable |
 
 **Signal handling**: SIGINT/SIGTERM cancel the context, let the engine commit the current attempt
