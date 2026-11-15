@@ -135,7 +135,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 - [X] T050 [US2] Implement schema version handling — a newer binary resuming older state either runs a recorded migration writing `state.migrated`, or refuses with `state.migration_refused` and an actionable message; never a best-effort interpretation (FR-017) — in `internal/store/sqlite/version.go`
 - [X] T051 [US2] Implement the `run resume` command — resuming `paused`/`pending`/runs with an expired lease, exit `4` naming the live owner and lease expiry, exit `0` with "already complete" and no work for a terminal run, `--file` (supplied definition) and `--allow-definition-drift` passthrough, and the same JSON envelope — in `internal/cli/resume.go`, wired from `internal/cli/cli.go`
 - [X] T052 [US2] Implement signal handling in `cmd/zamnius/main.go` — SIGINT/SIGTERM cancels the context so the engine commits the current attempt boundary, releases the lease, and leaves the run `paused`, exiting `7`; a second signal exits immediately with `1` and the run stays resumable ([contracts/cli.md](contracts/cli.md) §3)
-- [ ] T053 [US2] Implement the pause/resume persistence path — `run.paused` and `run.resumed` events committed with the status change and the `current_phase` update, with `Status` reporting the paused position and the next expected action, in `internal/store/sqlite/pause.go`
+- [X] T053 [US2] Implement the pause/resume persistence path — `run.paused` and `run.resumed` events committed with the status change and the `current_phase` update, with `Status` reporting the paused position and the next expected action. The pause co-commits the resume position in `internal/engine/cancel.go` and the run.resumed commit plus the shared position helper (`session.nextPhaseName`) live in `internal/engine/resume.go`; there is no `internal/store/sqlite/pause.go`, because pause/resume persistence is a run-level commit the engine owns and the `StateStore` contract exposes no pause/resume operation
 
 **Checkpoint**: User Stories 1 and 2 both work independently; recovery is proven at four interruption points plus a real `SIGKILL`.
 
@@ -296,6 +296,8 @@ starting the next task. Never batch several tasks into one turn or one commit.
   SIGKILL harness is verified non-vacuous by mutation (see T044 below).
 - The T051 CLI suite and the T052 signal cases pass with `-count=5`; the SIGTERM subprocess case is
   verified non-vacuous by mutation (see T052 below).
+- The T053 pause-position test (`TestPauseRecordsTheResumePosition`) passes `-count=20` and under
+  `-race` with no flakes; it is verified non-vacuous by mutation (see T053 below).
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -530,19 +532,48 @@ starting the next task. Never batch several tasks into one turn or one commit.
     channel) makes the child ignore the signal and the subprocess test times out; removing the
     immediate exit leaves the second-signal unit case waiting; exiting on the first signal fails the
     first-signal unit case.
+- **T053** Pause/resume persistence — the pause co-commits the resume position in
+  `internal/engine/cancel.go`, `run.resumed` is committed in `internal/engine/resume.go`, and both
+  share `session.nextPhaseName(ctx)`. Covered by `test/integration/pause_test.go` plus a
+  `current_phase` assertion added to `test/integration/cancel_test.go`:
+  - **A run interrupted between phases records the next phase as its position** — a recording
+    observer cancels the run's context the moment the first phase reaches a terminal state, so the
+    interruption lands between phases deterministically rather than by racing the scheduler. The
+    pause commits `run.paused` with the status change and `current_phase = "second"`; `Status`
+    reports `paused`, the position, and a `NextAction` naming the phase a resume runs; `LoadRun`
+    shows the position lives on the run row (the reader does not invent it); the second phase has no
+    attempt; and a resume finishes both phases with exactly two model calls, so the committed phase
+    is never repeated.
+  - **A run interrupted mid-phase keeps the phase it interrupted** — `cancel_test.go` now asserts
+    the paused `current_phase` names the fan-out phase that was in flight, so both pause scenarios
+    pin the same invariant: `current_phase` always names where work stopped.
+  - **Design**: `run.paused` already co-committed the status change but left `current_phase` at
+    whatever `startPhase` last wrote — a finished phase when the run stops between phases. The fix
+    is one field on the pause delta. `Status` needed no new field: `CurrentPhase` and `NextAction`
+    already exist and are computed from the row, so the task's named store file was **not** created
+    (see the task line — the `StateStore` contract exposes no pause/resume operation, and this is a
+    run-level commit the engine owns). `nextPhaseName` now takes the caller's context instead of a
+    detached `context.Background()`, so the position read is bounded by the pause commit's context
+    and one helper defines the resume position for both the pause and the resume.
+  - **Non-vacuousness by mutation**: removing `CurrentPhase: s.nextPhaseName(commitCtx)` from the
+    pause delta fails the between-phase test (`paused current_phase = 0x…, want "second"`); the red
+    state was confirmed this way before the fix, and the between-phase test passes `-count=20`.
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: T052 was the last entry and is now covered by
-`internal/cli/signal_internal_test.go` and `test/integration/signal_test.go`.
+Nothing outstanding: T052 and T053 were the last entries, and both are now covered
+(`internal/cli/signal_internal_test.go` + `test/integration/signal_test.go` for T052;
+`test/integration/pause_test.go` + `test/integration/cancel_test.go` for T053).
 ### Not started
 
-- **T053** Pause/resume persistence — `run.paused` is emitted from the engine cancel path
-  (`internal/engine/cancel.go`) and `run.resumed` from `internal/engine/resume.go`. The task's
-  named file `internal/store/sqlite/pause.go` and the explicit `Status` fields are not in place.
 - **T054–T062** US3 — untouched; only `internal/audit/verify.go` exists under `internal/audit`.
 - **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
   `CHANGELOG.md` does not exist.
+
+**US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
+lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
+migration/refusal, the `run resume` command, signal handling, and now the paused position. The next
+task is **T054**, the first of US3.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
