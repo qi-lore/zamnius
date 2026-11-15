@@ -25,16 +25,19 @@ type envelope struct {
 // runView is the run section: the same shape for every command, so a consumer
 // parses one object rather than one per subcommand.
 type runView struct {
-	ID             string             `json:"id"`
-	Status         string             `json:"status"`
-	CurrentPhase   *string            `json:"current_phase,omitempty"`
-	Phases         []phaseView        `json:"phases"`
-	Attempts       int                `json:"attempts"`
-	Budget         domain.Budget      `json:"budget"`
-	Spent          domain.Consumption `json:"spent"`
-	LeaseExpiresAt *time.Time         `json:"lease_expires_at,omitempty"`
-	NextAction     string             `json:"next_action"`
-	LastEvents     []eventView        `json:"last_events,omitempty"`
+	ID           string             `json:"id"`
+	Status       string             `json:"status"`
+	CurrentPhase *string            `json:"current_phase,omitempty"`
+	Phases       []phaseView        `json:"phases"`
+	Attempts     int                `json:"attempts"`
+	Budget       domain.Budget      `json:"budget"`
+	Spent        domain.Consumption `json:"spent"`
+	// OwnerID and LeaseExpiresAt explain a refused resume: they name the holding
+	// process and when its claim lapses (contracts/cli.md §1).
+	OwnerID        *string     `json:"owner_id,omitempty"`
+	LeaseExpiresAt *time.Time  `json:"lease_expires_at,omitempty"`
+	NextAction     string      `json:"next_action"`
+	LastEvents     []eventView `json:"last_events,omitempty"`
 }
 
 // phaseView is one phase row, flattened for reading.
@@ -92,6 +95,7 @@ func viewOf(status zamnius.Status, refs []zamnius.ArtifactRef) *runView {
 		Phases:         make([]phaseView, 0, len(status.Phases)),
 		Budget:         status.Budget,
 		Spent:          status.Spent,
+		OwnerID:        status.OwnerID,
 		LeaseExpiresAt: status.LeaseExpiresAt,
 		NextAction:     status.NextAction,
 	}

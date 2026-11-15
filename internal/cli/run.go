@@ -136,55 +136,6 @@ func (r *runner) runArtifacts(args []string) int {
 	})
 }
 
-// runResume executes `zamnius run resume`.
-func (r *runner) runResume(args []string) int {
-	const command = "run.resume"
-
-	positional, flags := splitArgs(args)
-	if len(positional) != 1 {
-		return r.usage("run resume needs exactly one run id")
-	}
-
-	var shared runFlags
-	var allowDrift bool
-	set := r.newFlagSet(command)
-	addCommon(set, &shared)
-	set.BoolVar(&allowDrift, "allow-definition-drift", false,
-		"permit resuming when the stored definition fingerprint has drifted")
-	if ok, code := r.parseFlags(set, flags); !ok {
-		return code
-	}
-	r.json = shared.json
-
-	runID, parseErr := uuid.Parse(positional[0])
-	if parseErr != nil {
-		return r.usage(fmt.Sprintf("%q is not a run id", positional[0]))
-	}
-
-	settings, err := r.resolveSettings(shared.stateDir, shared.config)
-	if err != nil {
-		return r.finish(command, nil, nil, "", err, nil)
-	}
-	composition, closeFn, err := openApp(r.ctx, settings)
-	if err != nil {
-		return r.finish(command, nil, nil, "", err, nil)
-	}
-	defer closeFn()
-
-	// Resuming executes work, so it needs the model credential. A run that is
-	// already terminal or held by another process is refused before any model call.
-	engine, err := composition.Engine()
-	if err != nil {
-		return r.finish(command, nil, nil, "", err, nil)
-	}
-
-	result, resumeErr := engine.Resume(r.ctx, runID, zamnius.ResumeOptions{
-		AllowDefinitionDrift: allowDrift,
-		MaxConcurrency:       settings.MaxConcurrency,
-	})
-	return r.reportOutcome(command, engine, result, resumeErr)
-}
-
 // inspectCommand is the shared preamble of the read-only commands: parse the run
 // id and flags, resolve settings, and hand an inspection-only engine to the body.
 // Inspection never needs a model credential, so a run stays readable after the key

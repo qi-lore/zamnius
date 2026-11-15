@@ -39,7 +39,7 @@ const (
 // usage is the one-line reminder printed after a usage error.
 const usage = `usage:
   zamnius run start    --file <path> [--state-dir <dir>] [--config <path>] [--json]
-  zamnius run resume   <run-id> [--state-dir <dir>] [--config <path>] [--allow-definition-drift] [--json]
+  zamnius run resume   <run-id> [--file <path>] [--state-dir <dir>] [--config <path>] [--allow-definition-drift] [--json]
   zamnius run status   <run-id> [--state-dir <dir>] [--json]
   zamnius run artifacts <run-id> [--state-dir <dir>] [--out <dir>] [--json]
   zamnius version`
@@ -195,11 +195,17 @@ func exitCodeFor(err error, runStatus domain.RunStatus) int {
 		return ExitOK
 	}
 	switch {
-	case errors.Is(err, domain.ErrInvalidDefinition), errors.Is(err, domain.ErrInvalidConfig):
+	case errors.Is(err, domain.ErrInvalidDefinition), errors.Is(err, domain.ErrInvalidConfig),
+		errors.Is(err, domain.ErrDefinitionDrift):
+		// A drifted definition is refused as an invalid definition: the run keeps
+		// its recorded workflow and the operator is told which fingerprint differs
+		// (contracts/cli.md §3).
 		return ExitInvalid
 	case errors.Is(err, domain.ErrRunAlreadyOwned):
 		return ExitOwned
-	case errors.Is(err, domain.ErrIntegrity):
+	case errors.Is(err, domain.ErrIntegrity), errors.Is(err, domain.ErrMigrationRefused):
+		// State written by an incompatible build is a persistence failure, not a
+		// definition or usage mistake: this build must not interpret it (FR-017).
 		return ExitIntegrity
 	}
 	if class := domain.ClassOf(err); class == domain.ErrClassCancelled {
