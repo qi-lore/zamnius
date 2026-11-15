@@ -187,16 +187,23 @@ func (r *runner) reportOutcome(command string, engine *zamnius.Engine, result za
 
 // inspect reads the run's current view and artifacts, tolerating a run that was
 // never created (Start failed before the first commit) so the caller still reports
-// the original error.
+// the original error. Reporting is deliberately detached from a context that has
+// already ended: a run that stopped because the process was signalled still has to
+// be describable, otherwise the operator sees exit `1` instead of the signalled
+// exit `7` and no view of what is now paused (contracts/cli.md §3, T052).
 func (r *runner) inspect(engine *zamnius.Engine, runID uuid.UUID) (*runView, []zamnius.ArtifactRef, error) {
 	if runID == uuid.Nil {
 		return nil, nil, nil
 	}
-	status, err := engine.Status(r.ctx, runID)
+	ctx := r.ctx
+	if ctx.Err() != nil {
+		ctx = context.WithoutCancel(ctx)
+	}
+	status, err := engine.Status(ctx, runID)
 	if err != nil {
 		return nil, nil, err
 	}
-	refs, err := engine.Artifacts(r.ctx, runID)
+	refs, err := engine.Artifacts(ctx, runID)
 	if err != nil {
 		return nil, nil, err
 	}
