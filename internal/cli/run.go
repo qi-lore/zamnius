@@ -103,39 +103,6 @@ func (r *runner) runStart(args []string) int {
 	return r.reportOutcome(command, engine, result, startErr)
 }
 
-// runStatus executes `zamnius run status`.
-func (r *runner) runStatus(args []string) int {
-	return r.inspectCommand("run.status", args, func(engine *zamnius.Engine, runID uuid.UUID) int {
-		status, err := engine.Status(r.ctx, runID)
-		if err != nil {
-			return r.finish("run.status", nil, nil, "", err, nil)
-		}
-		refs, err := engine.Artifacts(r.ctx, runID)
-		if err != nil {
-			return r.finish("run.status", nil, nil, "", err, nil)
-		}
-		view := viewOf(status, refs)
-		return r.finish("run.status", view, artifactViews(refs), status.Status, nil, func() { r.humanStatus(view) })
-	})
-}
-
-// runArtifacts executes `zamnius run artifacts`.
-func (r *runner) runArtifacts(args []string) int {
-	return r.inspectCommand("run.artifacts", args, func(engine *zamnius.Engine, runID uuid.UUID) int {
-		refs, err := engine.Artifacts(r.ctx, runID)
-		if err != nil {
-			return r.finish("run.artifacts", nil, nil, "", err, nil)
-		}
-		return r.finish("run.artifacts", nil, artifactViews(refs), "", nil, func() {
-			for _, artifact := range refs {
-				writeLine(r.stdout, "%s %s %d bytes %s",
-					artifact.Kind, artifact.SHA256, artifact.SizeBytes, artifact.Phase)
-			}
-			writeLine(r.stdout, "%s of run %s", plural(len(refs), "artifact"), runID)
-		})
-	})
-}
-
 // inspectCommand is the shared preamble of the read-only commands: parse the run
 // id and flags, resolve settings, and hand an inspection-only engine to the body.
 // Inspection never needs a model credential, so a run stays readable after the key
@@ -208,31 +175,6 @@ func (r *runner) inspect(engine *zamnius.Engine, runID uuid.UUID) (*runView, []z
 		return nil, nil, err
 	}
 	return viewOf(status, refs), refs, nil
-}
-
-// humanStatus prints the prose form of a status view: the position, the per-phase
-// rows, the consumed budget, and the tail of the event log.
-func (r *runner) humanStatus(view *runView) {
-	writeLine(r.stdout, "run %s", view.ID)
-	writeLine(r.stdout, "status: %s", view.Status)
-	if view.CurrentPhase != nil {
-		writeLine(r.stdout, "current phase: %s", *view.CurrentPhase)
-	}
-	for _, phase := range view.Phases {
-		line := fmt.Sprintf("  %-20s %-10s %s", phase.Name, phase.Status, plural(phase.Attempts, "attempt"))
-		if phase.Degraded {
-			line += " (degraded)"
-		}
-		if phase.FailureReason != nil {
-			line += ": " + *phase.FailureReason
-		}
-		writeLine(r.stdout, "%s", line)
-	}
-	writeLine(r.stdout, "spent: %s, %d tokens in, %d tokens out",
-		plural(view.Spent.Attempts, "attempt"), view.Spent.TokensIn, view.Spent.TokensOut)
-	if view.NextAction != "" {
-		writeLine(r.stdout, "next: %s", view.NextAction)
-	}
 }
 
 // alreadyComplete is the human form of a resume that did nothing because the run
