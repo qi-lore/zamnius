@@ -3,6 +3,8 @@
 Runnable checks that prove stories P1–P3 work end to end. This is a validation guide, not
 implementation documentation; the code that satisfies it lives under `tasks.md` and the implementation.
 Related: [contracts/cli.md](contracts/cli.md), [contracts/store.md](contracts/store.md), [data-model.md](data-model.md).
+The workflow definitions these scenarios run are annotated one behaviour at a time in
+[`examples/workflows/`](../../examples/workflows/README.md).
 
 ---
 

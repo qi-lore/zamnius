@@ -458,7 +458,7 @@ and no key are required. CI runs the five commands above plus `go test ./test/re
 
 | Path | What it is |
 |---|---|
-| [`examples/workflows/`](examples/workflows/) | runnable definitions: one workflow in three formats, a fan-out, a budget-bounded run, a delay-heavy run for interruption drills, and a deliberately invalid one |
+| [`examples/workflows/`](examples/workflows/README.md) | runnable definitions, each annotated with the behaviour it demonstrates: one workflow in three formats, a fan-out, a budget-bounded run, a delay-heavy run for interruption drills, and a deliberately invalid one |
 | [`specs/001-multi-agent-framework/spec.md`](specs/001-multi-agent-framework/spec.md) | what the framework must do, and why, with the decisions made while drafting |
 | [`specs/001-multi-agent-framework/quickstart.md`](specs/001-multi-agent-framework/quickstart.md) | the runnable validation scenarios per user story |
 | [`specs/001-multi-agent-framework/contracts/`](specs/001-multi-agent-framework/contracts/) | the schemas and interfaces: the workflow definition schema, the CLI, the library API, the model client, the store |
