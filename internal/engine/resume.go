@@ -115,6 +115,18 @@ func (e *Engine) Resume(ctx context.Context, runID uuid.UUID, opts ResumeOptions
 		return session.failOnIntegrity(ctx, "event chain verification failed", problems)
 	}
 
+	// Every artifact row must still have the bytes it names. A row whose file is
+	// missing or altered is an integrity failure with evidence, never a cue to
+	// re-run the phase that produced it: rebuilding the content would silently
+	// replace the record the run is audited against (contracts/store.md §5 step 3).
+	refs, err := e.Artifacts(ctx, run.ID)
+	if err != nil {
+		return session.result(err), err
+	}
+	if problems := audit.VerifyArtifacts(ctx, refs, e.artifacts); len(problems) > 0 {
+		return session.failOnIntegrity(ctx, "artifact integrity verification failed", problems)
+	}
+
 	if err := session.reconcileAttempts(ctx, events); err != nil {
 		return session.result(err), err
 	}

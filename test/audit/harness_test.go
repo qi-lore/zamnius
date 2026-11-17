@@ -24,6 +24,7 @@ import (
 // auditFixture bundles the real collaborators an audit test reads from.
 type auditFixture struct {
 	t         *testing.T
+	dir       string
 	engine    *engine.Engine
 	store     *sqlite.Store
 	artifacts *artifactfs.Store
@@ -73,7 +74,14 @@ func newAuditFixture(t *testing.T) *auditFixture {
 		t.Fatalf("build engine: %v", err)
 	}
 
-	return &auditFixture{t: t, engine: eng, store: store, artifacts: artifacts, client: client}
+	return &auditFixture{
+		t:         t,
+		dir:       layout.Dir,
+		engine:    eng,
+		store:     store,
+		artifacts: artifacts,
+		client:    client,
+	}
 }
 
 // auditRegistry resolves the one provider the fixtures use. The engine's Models port
