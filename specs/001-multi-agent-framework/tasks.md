@@ -159,7 +159,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 - [X] T058 [US3] Implement the audit views in `internal/audit/view.go` — ordered timeline with decision records interleaved at their `seq`, run status view (run row + latest events + phase rows), reconstruction view (current position, completed and pending work, next expected action), and verification view (chain validity plus artifact fingerprints) — all computed on demand and never stored as a second source of truth
 - [X] T059 [US3] Implement streaming chain and fingerprint verification — recompute `sha256(prev_hash || canonical(payload-with-metadata))` event by event, cross-check every artifact row against its file, and return a `VerifyReport` distinguishing chain failure, missing file, and digest mismatch — in `internal/audit/verify.go`, exposed as `Engine.Verify` in `pkg/zamnius/engine.go`
 - [X] T060 [US3] Implement the orphan artifact sweep — identify files under the artifact root with no `artifacts` row, delete them only when no run is `running`, and return the count and bytes reclaimed — in `internal/store/artifactfs/sweep.go`, tested in `internal/store/artifactfs/sweep_test.go`; the command surface stays out of the CLI for this increment ([contracts/store.md](contracts/store.md) §4)
-- [ ] T061 [US3] Implement the integrity-facing CLI behaviour — `run artifacts --out <dir>` verifying each fingerprint before writing and aborting with exit `6` on mismatch, and `run status` reporting run status, current phase, per-phase status, attempt counts, budgets consumed, and the last five events in both human and `--json` form — in `internal/cli/artifacts.go` and `internal/cli/status.go`
+- [X] T061 [US3] Implement the integrity-facing CLI behaviour — `run artifacts --out <dir>` verifying each fingerprint before writing and aborting with exit `6` on mismatch, and `run status` reporting run status, current phase, per-phase status, attempt counts, budgets consumed, and the last five events in both human and `--json` form — in `internal/cli/artifacts.go` and `internal/cli/status.go`
 - [ ] T062 [US3] Extend `test/integration/cli_test.go` with golden assertions for the enriched status view, artifact export verification, and exit `6` on a deliberately corrupted artifact file, so the audit surface is asserted through the same contract tests as the rest of the CLI
 
 **Checkpoint**: All three stories are independently functional; the audit record is provable and the reconstruction claim is tested.
@@ -766,13 +766,51 @@ starting the next task. Never batch several tasks into one turn or one commit.
     `TestSweepRefusesWhileARunIsRunning`; dropping the shard-prefix check so any 64-hex name is a
     candidate fails `TestSweepLeavesMalformedAndForeignFiles` (`Reclaimed = 2, want 1`).
 
+- **T061** Integrity-facing CLI — `internal/cli/artifacts.go`, `internal/cli/status.go`, and the two
+  focused internal test files `artifacts_internal_test.go` and `status_internal_test.go`. The commands
+  already existed (T039–T041) as thin adapters over the engine; this task supplied the two pieces the
+  contract still owed (contracts/cli.md §1): the artifact export, and the last five events in the human
+  status form. `runArtifacts` moved into `artifacts.go` and `runStatus`/`humanStatus` into `status.go`,
+  so each command is one file; `run.go` keeps the shared `inspectCommand` preamble and the executing
+  commands.
+  - **Export verifies before it writes**: `run artifacts --out <dir>` reads each artifact through the
+    content-addressed store (`ArtifactStore.Get`), which checks the file's sha256 against its name and
+    returns no bytes on a mismatch — so the digest is confirmed before the copy is created, and a
+    mismatch leaves no corrupt file behind. Content is fetched through the artifact store, never
+    inlined by the engine (contracts/library-api.md §2), so `runArtifacts` takes its own preamble over
+    the composition's artifact store rather than the inspection engine's read model.
+  - **One failure class for a disagreement**: a fingerprint mismatch and a missing file are both
+    `domain.ErrIntegrity` — the record and the content it points at disagree (domain/errors.go) — so
+    `artifactIntegrityFailure` joins the sentinel and maps both onto exit `6`, with a hint naming the
+    stored file and the digest it should have had (contracts/cli.md §2, §3, quickstart §6). The exported
+    file is named `<kind>-<sha256>`, which is unique within a run because a digest is one content.
+  - **Status prints what the contract names**: the human form now ends with the last five events
+    (`seq`, type, actor, phase) after the position, the per-phase rows with their attempt counts, the
+    consumed budget, and the next action. The `--json` form already carried the same five through
+    `viewOf`/`StatusView.LastEvents` (T058), so the two renderings are one projection and cannot drift.
+  - **The tests (T061's own, focused)**: the export writes exactly the verified bytes; a mismatched
+    fingerprint aborts with an error matching `domain.ErrIntegrity`, exit `6`, a diagnostic naming the
+    digest and its file, and nothing written; a missing file is the same integrity failure; and
+    `humanStatus` prints the event tail. The read path is a fake, so verification is exercised without a
+    workflow. The end-to-end path — a real corrupted file aborting `run artifacts --out` with exit `6` —
+    is T062's golden integration test.
+  - **Verified by hand** as well: a real single-phase run (`go run ./cmd/zamnius run start` against a
+    local fake provider) then `run artifacts … --out` wrote the file, and corrupting the stored CAS file
+    made the same command exit `6` naming the file and digest, with the output directory left empty;
+    `run status` printed the last five events and `--json` carried them.
+  - **Non-vacuousness by mutation**: dropping `domain.ErrIntegrity` from the joined cause fails
+    `TestExportArtifactsTreatsAMissingFileAsIntegrity` (exit becomes `1`, not `6`); removing the event
+    tail from `humanStatus` fails `TestHumanStatusPrintsTheLastEvents`.
+
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052 through T060 — are all covered.
+Nothing outstanding: the last entries — T052 through T061 — are all covered.
 ### Not started
 
-- **T061–T062** US3 — the orphan-artifact sweep is covered (T060). The integrity-facing CLI behaviour
-  (`run artifacts`, enriched `run status`) and its contract tests remain.
+- **T062** US3 — the orphan-artifact sweep (T060) and the integrity-facing CLI (T061) are in place and
+  carry their focused unit tests. T062 adds the end-to-end golden assertions in
+  `test/integration/cli_test.go`: the enriched status view, artifact export verification, and exit `6`
+  on a deliberately corrupted artifact file, through the same contract tests as the rest of the CLI.
 - **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
   `CHANGELOG.md` does not exist.
 
@@ -781,8 +819,9 @@ lease contention and takeover, attempt reconciliation, definition-drift refusal,
 migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
 under way: T054 (chain integrity), T055 (artifact integrity), T056 (completeness), T057
 (reconstruction), T058 (the timeline, run-status, and verification views), T059 (streaming chain
-verification and the broken-chain refusal), and T060 (the orphan artifact sweep) are done.** The
-next task is **T061**.
+verification and the broken-chain refusal), T060 (the orphan artifact sweep), and T061 (artifact export
+verification and the enriched status view) are done.** The
+next task is **T062**.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
@@ -802,6 +841,13 @@ next task is **T061**.
   each transaction, so the recoverability suite can crash exactly at a transaction boundary.
 - `internal/store/sqlite` artifacts use `sha256` as a `UNIQUE` key with `ON CONFLICT DO NOTHING`;
   identical content dedupes to one row, so per-branch test content is made distinct deliberately.
+- The artifact export (`internal/cli/artifacts.go`, T061) names each exported file `<kind>-<sha256>`
+  and maps **both** a fingerprint mismatch and a missing file onto `domain.ErrIntegrity` (exit `6`):
+  the contract's `--out` clause names only a mismatch, but `domain.ErrIntegrity` already covers "a
+  missing artifact file", and a row left pointing at absent content is the same disclosure of a
+  disagreement between the record and its content. The export reads through `ArtifactStore.Get` rather
+  than the engine, which exposes no content path by design (contracts/library-api.md §2), so the command
+  takes the composition's artifact store instead of the inspection engine.
 
 ### Known open defects to carry forward
 
