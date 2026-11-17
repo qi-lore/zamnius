@@ -172,7 +172,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 
 - [X] T063 [P] Add the secret-leak suite in `test/secrets/secrets_test.go` — run the full offline corpus with `ZAMNIUS_MODEL_API_KEY=sk-test-canary`, then scan every artifact file, event payload, decision record, JSON envelope, and captured log line for the canary and for `Authorization` values, asserting zero findings (SC-014, FR-054)
 - [X] T064 [P] Write the getting-started guide in `README.md` — install, the three formats, one single-phase run, one fan-out run, status, resume — meeting the 15-minute first-run target (SC-013)
-- [ ] T065 [P] Add `CHANGELOG.md` recording the initial public contract set (`pkg/zamnius`) with a compatibility note stating the semver policy of [contracts/library-api.md](contracts/library-api.md) §5 (SC-016)
+- [X] T065 [P] Add `CHANGELOG.md` recording the initial public contract set (`pkg/zamnius`) with a compatibility note stating the semver policy of [contracts/library-api.md](contracts/library-api.md) §5 (SC-016)
 - [ ] T066 [P] Document `examples/workflows/` — annotate each sample with the behaviour it demonstrates and link it from `README.md` and [quickstart.md](quickstart.md)
 - [ ] T067 Measure and record coverage — `internal/engine`, `internal/store/sqlite`, and `internal/audit` at ≥ 80% statements and no package below 60% — using `go test ./... -coverprofile=coverage.out` and record the result in [quickstart.md](quickstart.md) §Automated equivalents
 - [ ] T068 Run the full verification sweep and every quickstart scenario — `go build ./...`, `go vet ./...`, `go test ./... -count=1`, `go test ./... -race -count=1`, `CGO_ENABLED=0 go build ./...`, `go test ./test/recoverability -count=10` with zero flakes, and the eight manual scenarios in [quickstart.md](quickstart.md) — then record the outcome in [quickstart.md](quickstart.md) §Definition of done
@@ -310,6 +310,9 @@ starting the next task. Never batch several tasks into one turn or one commit.
   `cmd/zamnius` against a local OpenAI-compatible stub, the resume drill included (a real `kill -9`,
   a real exit `4` inside the lease window, and a real completion after it lapsed). The README's
   relative links all resolve and its two YAML snippets are byte-identical to the shipped examples.
+- The T065 changelog records the whole public contract: all 98 exported package-level identifiers of
+  `pkg/zamnius` appear in it (zero missing, checked against the production sources) and both of its
+  relative links resolve to files that exist.
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -901,15 +904,31 @@ starting the next task. Never batch several tasks into one turn or one commit.
     `model.base_url` is schema-validated but unconsumed, the exit-`4` lease message is doubly wrapped, and
     quickstart scenarios 1 and 5 misdescribe the state layout and the budget fixture's exit code.
 
+- **T065** Changelog — `CHANGELOG.md` added at the repository root (documentation only; no code, no test
+  change). It records the initial public contract set of `pkg/zamnius` and states the compatibility policy
+  of [contracts/library-api.md](contracts/library-api.md) §5 (SC-016).
+  - **What it records**: the entry point (`New`, `Options`, `Engine` and its five operations); the
+    workflow and result vocabulary (`Definition`, `RunResult`, `PhaseResult`, `Status`, `StartOptions`,
+    `ResumeOptions`, `VerifyReport`); the durable type aliases; the status and classification vocabulary
+    with every constant; the five extension interfaces (`StateStore`, `ArtifactStore`, `ModelClient`,
+    `ModelRegistry`, `Observer`); and the exported error vocabulary (`ClassOf`, `HintOf`, and the eight
+    sentinels).
+  - **The compatibility note**: additive changes are minor, removing or changing an exported signature is
+    major, every public contract change carries a note in the changelog (SC-016), and `internal/` packages
+    are not part of the contract.
+  - **Checked mechanically**: all 98 exported package-level identifiers of `pkg/zamnius`, extracted from
+    the production sources (`_test.go` excluded), appear in the changelog — zero missing — and both
+    relative links resolve to files that exist. The version line matches the build (`zamnius 0.1.0`,
+    `api_version "1"`, `schema 1`); the entry is marked `unreleased` because no git tag exists.
+
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052 through T063 — are all covered.
+Nothing outstanding: the last entries — T052 through T065 — are all covered.
 
 ### Not started
 
-- **T065–T068** Polish — untouched. `CHANGELOG.md` does not exist yet (T065); T066 annotates
-  `examples/workflows/`, T067 records coverage, T068 runs the full verification sweep and the quickstart
-  scenarios.
+- **T066–T068** Polish — untouched. T066 annotates `examples/workflows/`, T067 records coverage, T068
+  runs the full verification sweep and the quickstart scenarios.
 
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
@@ -917,9 +936,10 @@ migration/refusal, the `run resume` command, signal handling, and now the paused
 complete** (T054–T062): chain integrity, artifact integrity, completeness, reconstruction, the
 timeline/status/verification views, streaming chain verification, the broken-chain refusal, the orphan
 artifact sweep, the integrity-facing CLI, and the end-to-end golden assertions are all done. Polish is
-under way: **T063** closed the secret-leak suite and **T064** replaced the placeholder README with the
-getting-started guide, whose every transcript was reproduced against a local OpenAI-compatible stub.
-The next task is **T065** (`CHANGELOG.md`).
+under way: **T063** closed the secret-leak suite, **T064** replaced the placeholder README with the
+getting-started guide, whose every transcript was reproduced against a local OpenAI-compatible stub,
+and **T065** added `CHANGELOG.md` recording the initial public contract set and its semver policy. The
+next task is **T066** (annotate `examples/workflows/`).
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
