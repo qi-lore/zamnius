@@ -15,6 +15,7 @@ import (
 
 	"github.com/prompt-fu/zamnius/internal/app"
 	"github.com/prompt-fu/zamnius/internal/cli"
+	"github.com/prompt-fu/zamnius/internal/domain"
 	"github.com/prompt-fu/zamnius/internal/observability"
 )
 
@@ -328,5 +329,180 @@ func TestCLIInvalidDefinitionExitsFiveWithAFieldPath(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "hint:") && !strings.Contains(stderr, "hint") {
 		t.Errorf("human failure %q does not print the hint", stderr)
+	}
+}
+
+// lastEventsOf returns the run view's recent-events array.
+func lastEventsOf(t *testing.T, run map[string]any) []map[string]any {
+	t.Helper()
+
+	raw, ok := run["last_events"].([]any)
+	if !ok {
+		t.Fatalf("run has no last_events array: %v", run)
+	}
+	out := make([]map[string]any, 0, len(raw))
+	for _, entry := range raw {
+		item, ok := entry.(map[string]any)
+		if !ok {
+			t.Fatalf("event entry is not an object: %v", entry)
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+// TestCLIStatusEnvelopeCarriesTheEnrichedView locks the enriched status surface
+// (T061): the position the contract names, the next action, and the last five
+// events — in the versioned envelope and in the human prose, from one derivation.
+func TestCLIStatusEnvelopeCarriesTheEnrichedView(t *testing.T) {
+	env := newCLIEnv(t)
+
+	code, envelope, stderr := env.runJSON("run", "start", "--file", fixture(t, "hello.yaml"), "--state-dir", env.stateDir)
+	if code != 0 {
+		t.Fatalf("run start exit = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	id := runID(t, envelope)
+
+	code, statusEnvelope, stderr := env.runJSON("run", "status", id, "--state-dir", env.stateDir)
+	if code != 0 {
+		t.Fatalf("run status exit = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	run, _ := statusEnvelope["run"].(map[string]any)
+	if run == nil {
+		t.Fatalf("status envelope has no run object: %v", statusEnvelope)
+	}
+
+	if action, _ := run["next_action"].(string); action == "" {
+		t.Errorf("run.next_action = %v, want the next expected action", run["next_action"])
+	}
+
+	events := lastEventsOf(t, run)
+	if len(events) == 0 {
+		t.Fatalf("run.last_events is empty, want the run's recent events")
+	}
+	if len(events) > 5 {
+		t.Errorf("last_events carried %d entries, want at most the 5 the contract fixes", len(events))
+	}
+	sawTerminal := false
+	for _, event := range events {
+		for _, key := range []string{"seq", "type", "ts", "actor"} {
+			if _, present := event[key]; !present {
+				t.Errorf("event %v is missing %q", event, key)
+			}
+		}
+		if _, ok := event["seq"].(float64); !ok {
+			t.Errorf("event seq is not a number: %v", event["seq"])
+		}
+		if event["type"] == "run.succeeded" {
+			sawTerminal = true
+		}
+	}
+	if !sawTerminal {
+		t.Errorf("last_events %v do not include the run's terminal event", events)
+	}
+
+	// The human form must print the same tail, not only the JSON envelope.
+	code, stdout, _ := env.run("run", "status", id, "--state-dir", env.stateDir)
+	if code != 0 {
+		t.Fatalf("human run status exit = %d, want 0", code)
+	}
+	if !strings.Contains(stdout, "last events:") {
+		t.Errorf("human status %q does not introduce the event tail", stdout)
+	}
+	if !strings.Contains(stdout, "run.succeeded") {
+		t.Errorf("human status %q does not name the terminal event", stdout)
+	}
+}
+
+// TestCLIArtifactsExportVerifiesEveryFingerprint proves the `--out` contract
+// (T061, contracts/cli.md §1): every committed artifact is copied, and each copy
+// hashes to the digest the record gives for it.
+func TestCLIArtifactsExportVerifiesEveryFingerprint(t *testing.T) {
+	env := newCLIEnv(t)
+
+	// A fan-out run produces several artifacts (three branches, an aggregate, and a
+	// summary), so more than one fingerprint is exercised.
+	code, envelope, stderr := env.runJSON("run", "start", "--file", fixture(t, "fanout.yaml"), "--state-dir", env.stateDir)
+	if code != 0 {
+		t.Fatalf("run start exit = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	id := runID(t, envelope)
+	artifacts := artifactsOf(t, envelope)
+	if len(artifacts) < 2 {
+		t.Fatalf("run produced %d artifacts, want several to verify the export", len(artifacts))
+	}
+
+	out := filepath.Join(t.TempDir(), "export")
+	code, stdout, stderr := env.run("run", "artifacts", id, "--state-dir", env.stateDir, "--out", out)
+	if code != 0 {
+		t.Fatalf("run artifacts --out exit = %d, want 0 (stderr: %s)", code, stderr)
+	}
+
+	for _, artifact := range artifacts {
+		sha, _ := artifact["sha256"].(string)
+		kind, _ := artifact["kind"].(string)
+		content, err := os.ReadFile(filepath.Join(out, kind+"-"+sha))
+		if err != nil {
+			t.Errorf("exported artifact for %s: %v", sha, err)
+			continue
+		}
+		if got := domain.HashBytes(content); got != sha {
+			t.Errorf("exported %s hashes to %s, want %s", kind, got, sha)
+		}
+		if size, _ := artifact["size_bytes"].(float64); int64(len(content)) != int64(size) {
+			t.Errorf("exported %s size = %d, want %d", kind, len(content), int64(size))
+		}
+	}
+	if !strings.Contains(stdout, "exported") {
+		t.Errorf("human export output %q does not confirm the export", stdout)
+	}
+}
+
+// TestCLIArtifactsExportAbortsOnACorruptedFile is the tamper-evidence check
+// (T061, contracts/cli.md §1, §3, quickstart §6): a stored artifact whose content
+// no longer matches its fingerprint makes the export exit `6`, names the digest,
+// and leaves no corrupt copy behind.
+func TestCLIArtifactsExportAbortsOnACorruptedFile(t *testing.T) {
+	env := newCLIEnv(t)
+
+	code, envelope, stderr := env.runJSON("run", "start", "--file", fixture(t, "hello.yaml"), "--state-dir", env.stateDir)
+	if code != 0 {
+		t.Fatalf("run start exit = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	id := runID(t, envelope)
+	artifacts := artifactsOf(t, envelope)
+	if len(artifacts) == 0 {
+		t.Fatal("run produced no artifacts to corrupt")
+	}
+	sha, _ := artifacts[0]["sha256"].(string)
+
+	// Corrupt the stored content-addressed file, exactly as a bit-rot or a
+	// tampering would, leaving the row and its expected digest untouched.
+	casFile := filepath.Join(app.PathsFor(env.stateDir).Artifacts, sha[:2], sha)
+	if err := os.WriteFile(casFile, []byte("tampered content"), 0o600); err != nil {
+		t.Fatalf("corrupt the stored artifact %s: %v", casFile, err)
+	}
+
+	out := filepath.Join(t.TempDir(), "export")
+	code, exportEnvelope, stderr := env.runJSON("run", "artifacts", id, "--state-dir", env.stateDir, "--out", out)
+	if code != 6 {
+		t.Fatalf("corrupted export exit = %d, want 6 (stderr: %s)", code, stderr)
+	}
+	if got := exportEnvelope["ok"]; got != false {
+		t.Errorf("ok = %v, want false", got)
+	}
+	failure, ok := exportEnvelope["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("error = %v, want an object", exportEnvelope["error"])
+	}
+	if message, _ := failure["message"].(string); !strings.Contains(message, sha) {
+		t.Errorf("error.message = %q, want it to name the offending digest", message)
+	}
+	if hint, _ := failure["hint"].(string); !strings.Contains(hint, sha) {
+		t.Errorf("error.hint = %q, want it to name the offending digest", hint)
+	}
+	// A mismatch must not leave a corrupt copy behind.
+	if entries, err := os.ReadDir(out); err == nil && len(entries) != 0 {
+		t.Errorf("a corrupted artifact was exported: %v", entries)
 	}
 }
