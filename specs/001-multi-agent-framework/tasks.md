@@ -152,7 +152,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 - [X] T054 [P] [US3] Write chain-integrity tests in `test/audit/chain_test.go` (with the shared `test/audit/harness_test.go`): verification over a clean run passes; a single mutated `payload`, `hash`, or `prev_hash` is detected at the correct `seq`; a deleted event is detected as a gap; `UPDATE`/`DELETE` on `events` is rejected at the schema level (US3 scenario 3)
 - [X] T055 [P] [US3] Write artifact-integrity tests in `test/audit/artifact_test.go`: every referenced artifact verifies against its recorded `sha256` (US3 scenario 4); a corrupted file fails with exit `6` naming the file and expected digest; a row whose file is missing is an integrity failure and never triggers a silent re-run ([contracts/store.md](contracts/store.md) §5 step 3)
 - [X] T056 [P] [US3] Write the audit completeness check in `test/audit/completeness_test.go` — every phase transition and every retry, escalation, budget stop, takeover, skip, and resume restart in the event log has a corresponding decision record whose `rationale` names the triggering condition, and every event carries an actor, timestamp, phase, and cause (SC-005, US3 scenarios 1 and 2)
-- [ ] T057 [P] [US3] Write the reconstruction test in `test/audit/reconstruct_test.go` — from the store alone, a reader derives current phase, completed branches, pending work, and next expected action for at least 20 sampled scenarios, including one paused mid-fan-out and one failed on an `all` join (SC-004, FR-023)
+- [X] T057 [P] [US3] Write the reconstruction test in `test/audit/reconstruct_test.go` — from the store alone, a reader derives current phase, completed branches, pending work, and next expected action for at least 20 sampled scenarios, including one paused mid-fan-out and one failed on an `all` join (SC-004, FR-023)
 
 ### Implementation for User Story 3
 
@@ -299,7 +299,8 @@ starting the next task. Never batch several tasks into one turn or one commit.
 - The T053 pause-position test (`TestPauseRecordsTheResumePosition`) passes `-count=20` and under
   `-race` with no flakes; it is verified non-vacuous by mutation (see T053 below).
 - `test/audit` passes `-race -count=10`; the chain-integrity, artifact-integrity, and completeness
-  tests are verified non-vacuous by mutation (see T054, T055, and T056 below).
+  tests are verified non-vacuous by mutation (see T054, T055, and T056 below). The reconstruction
+  suite passes `-race -count=5` and is verified non-vacuous by mutation (see T057 below).
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -322,8 +323,9 @@ starting the next task. Never batch several tasks into one turn or one commit.
   version, refuses definition drift, takes the lease, verifies the event chain
   (`audit.VerifyChain`), reconciles attempts, then drives from the current position. Exercised
   end-to-end by the T043 suite.
-  - **Residual coverage gap**: the failure paths — `failOnIntegrity` on a broken chain, and the
-    pause-with-recorded-reason path — are not yet asserted by a dedicated test. T057/T059 must cover them.
+  - **Residual coverage gap**: the `failOnIntegrity` path on a broken chain is not yet asserted by a
+    dedicated test; T059 must cover it. (The other failure path, the pause with a recorded reason, is
+    now asserted by T057's `paused_between_phases` and `paused_*` scenarios.)
 - **T044** Genuine process-death harness — `test/recoverability/sigkill_test.go`. `TestMain` re-executes
   the test binary as a child (`ZAMNIUS_SIGKILL_CHILD=1`); the child wires the engine through the same
   `newInstance` path the in-process tests use, starts the fan-out definition, answers one branch, blocks
@@ -639,14 +641,43 @@ starting the next task. Never batch several tasks into one turn or one commit.
   - **Non-vacuousness by mutation**: removing `reason` from the `run.succeeded` payload fails the
     attribution test for five runs; weakening the retry rationale to "a provider error occurred"
     fails the decision test for the retry and escalation runs.
+- **T057** Reconstruction view and its test — `internal/audit/view.go` and
+  `test/audit/reconstruct_test.go`. The task is a test task, but the view it samples did not exist,
+  so the smallest implementation that can be read landed with it: `Reader` (a port over
+  `LoadRun`/`Phases`/`Events`), `Reconstruct`, `Work`, `Reconstruction`, and the branch-progress
+  derivation. The remaining views T058 lists (timeline interleaving, run status view, verification
+  view) are untouched and still belong to T058.
+  - **What the view answers**: run status, the position the run row records, the recorded outcome
+    reason, and a partition of the declared work — `Completed` is every phase and branch the record
+    gives an outcome, `Pending` is every phase and branch it does not. A phase is one `Work`; a
+    fan-out additionally reports one `Work` per declared branch, in declared order, taking the
+    outcome from the join result when the phase is terminal and from the last attempt event per
+    branch while it is still running (an abandoned or in-flight attempt is pending, because resume
+    restarts it). `NextAction` reuses the exact vocabulary `Engine.Status` publishes.
+  - **The corpus** is 22 real runs driven through real engines and stores with only the model
+    scripted: single, two- and three-phase successes; fan-out with `all`, `any`, and `n_of_m`;
+    a failure on an `all` join with a phase left pending; a skipped fan-out; retry-then-success;
+    retries exhausted; `continue` degradation; a skipped phase; budget stop with `continue` and with
+    `abort`; a pause between phases; a pause inside a single-agent attempt; **a pause mid-fan-out**;
+    resume after a pause; resume after a reconciled restart; resume of an interrupted fan-out; a
+    lease takeover while paused; and a drift-override resume. Each case asserts the exact completed
+    and pending work, the position, the reason, and the next action, plus that two independent reads
+    agree and that `audit` and `Engine.Status` give the same position and next action.
+  - **Interruption points are observed, not assumed**: the pause-inside-an-attempt cases cancel only
+    after a gate reports the blocked attempt started, and the mid-fan-out case additionally polls the
+    durable record until the sibling branch's succeeded attempt is committed, then cancels.
+  - **Non-vacuousness by mutation**: dropping the branch rows from a terminal join fails four
+    scenarios; treating an in-flight branch as finished fails `paused_mid_fanout`; shortening the
+    interrupted-phase next action fails `paused_mid_phase` and `paused_mid_fanout` (both from the
+    expectation and from the `Engine.Status` cross-check).
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052, T053, T054, T055, and T056 — are all covered.
+Nothing outstanding: the last entries — T052, T053, T054, T055, T056, and T057 — are all covered.
 ### Not started
 
-- **T057–T062** US3 — verification and completeness are covered (T054 chain, T055 artifacts, T056
-  completeness). The reconstruction suite, the audit views, streaming verification as
+- **T058–T062** US3 — chain, artifact, and completeness verification and the reconstruction view are
+  covered (T054, T055, T056, T057). The timeline and run-status views, streaming verification as
   `Engine.Verify`, the orphan-artifact sweep, and the integrity-facing CLI behaviour remain.
 - **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
   `CHANGELOG.md` does not exist.
@@ -654,8 +685,8 @@ Nothing outstanding: the last entries — T052, T053, T054, T055, and T056 — a
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
 migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
-under way: T054 (chain integrity), T055 (artifact integrity), and T056 (completeness) are done.**
-The next task is **T057**.
+under way: T054 (chain integrity), T055 (artifact integrity), T056 (completeness), and T057
+(reconstruction) are done.** The next task is **T058**.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
