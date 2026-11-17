@@ -151,21 +151,11 @@ type RunResult struct {
 	Err       error                `json:"-"`
 }
 
-// Status is the on-demand position report; nothing here is stored twice.
-type Status struct {
-	RunID        uuid.UUID           `json:"run_id"`
-	Status       domain.RunStatus    `json:"status"`
-	CurrentPhase *string             `json:"current_phase,omitempty"`
-	Phases       []domain.PhaseState `json:"phases"`
-	Budget       domain.Budget       `json:"budget"`
-	Spent        domain.Consumption  `json:"spent"`
-	// OwnerID and LeaseExpiresAt are what explain a refused resume: they name the
-	// process holding the run and when its claim lapses (contracts/cli.md §1).
-	OwnerID        *string        `json:"owner_id,omitempty"`
-	LeaseExpiresAt *time.Time     `json:"lease_expires_at,omitempty"`
-	NextAction     string         `json:"next_action"`
-	LastEvents     []domain.Event `json:"last_events,omitempty"`
-}
+// Status is the on-demand position report `zamnius run status` prints. It is the audit
+// view, not a copy of it: one derivation of the position and one vocabulary for the
+// next action, so a reader and an operator cannot be told different things
+// (internal/audit/view.go).
+type Status = audit.StatusView
 
 // New builds an engine. Missing dependencies are refused rather than defaulted:
 // an engine with no store would silently lose work.
@@ -311,37 +301,10 @@ func (e *Engine) Start(ctx context.Context, def definition.Definition, opts Star
 }
 
 // Status reports the current position without acquiring the lease, so a reader
-// can never interfere with the owner.
+// can never interfere with the owner. The derivation is the audit view, so the CLI,
+// the library, and an auditor reading the store all get one answer.
 func (e *Engine) Status(ctx context.Context, runID uuid.UUID) (Status, error) {
-	run, err := e.store.LoadRun(ctx, runID)
-	if err != nil {
-		return Status{}, err
-	}
-	phases, err := e.store.Phases(ctx, runID)
-	if err != nil {
-		return Status{}, err
-	}
-	events, err := e.store.Events(ctx, runID, 0)
-	if err != nil {
-		return Status{}, err
-	}
-
-	status := Status{
-		RunID:          run.ID,
-		Status:         run.Status,
-		CurrentPhase:   run.CurrentPhase,
-		Phases:         phases,
-		Budget:         run.Budget,
-		Spent:          run.Spent,
-		OwnerID:        run.OwnerID,
-		LeaseExpiresAt: run.LeaseExpiresAt,
-		NextAction:     nextAction(run, phases),
-	}
-	if len(events) > 5 {
-		events = events[len(events)-5:]
-	}
-	status.LastEvents = events
-	return status, nil
+	return audit.Status(ctx, e.store, runID)
 }
 
 // Artifacts lists the run's committed artifacts in commit order. It walks
@@ -379,6 +342,8 @@ func (e *Engine) Artifacts(ctx context.Context, runID uuid.UUID) ([]domain.Artif
 
 // Verify checks the event chain and every artifact fingerprint. It returns the
 // report even when verification fails, because the counts are part of the answer.
+// The checks are the audit verification view; the engine only decides which reads to
+// hand it and records the failure.
 func (e *Engine) Verify(ctx context.Context, runID uuid.UUID) (audit.Report, error) {
 	run, err := e.store.LoadRun(ctx, runID)
 	if err != nil {
@@ -393,18 +358,9 @@ func (e *Engine) Verify(ctx context.Context, runID uuid.UUID) (audit.Report, err
 		return audit.Report{}, err
 	}
 
-	problems := audit.VerifyChain(events)
-	problems = append(problems, audit.VerifyArtifacts(ctx, refs, e.artifacts)...)
-
-	report := audit.Report{
-		RunID:      run.ID,
-		Events:     len(events),
-		Artifacts:  len(refs),
-		VerifiedAt: e.now(),
-		Problems:   problems,
-	}
+	report := audit.Verify(ctx, run.ID, events, refs, e.artifacts, e.now())
 	if !report.OK() {
-		e.logger.Error("verification failed", "run_id", run.ID.String(), "problems", len(problems))
+		e.logger.Error("verification failed", "run_id", run.ID.String(), "problems", len(report.Problems))
 	}
 	return report, nil
 }
@@ -680,28 +636,4 @@ func causeOf(err error) string {
 		text = text[:500] + "…"
 	}
 	return strings.ReplaceAll(text, "\n", " ")
-}
-
-// nextAction tells an operator what the next step would be, which is what makes
-// the resumed position legible without reading the event log (FR-023).
-func nextAction(run domain.Run, phases []domain.PhaseState) string {
-	switch run.Status {
-	case domain.RunSucceeded:
-		return "nothing; the run is complete"
-	case domain.RunFailed:
-		return "inspect the failed phase, then resume after fixing its cause"
-	case domain.RunCancelled:
-		return "nothing; the run was cancelled"
-	}
-	for _, phase := range phases {
-		if phase.Status == domain.PhaseRunning {
-			return "resume the run; phase " + phase.Name + " was interrupted"
-		}
-	}
-	for _, phase := range phases {
-		if !phase.Status.Terminal() {
-			return "resume the run to execute phase " + phase.Name
-		}
-	}
-	return "nothing; every phase reached a terminal state"
 }
