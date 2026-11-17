@@ -171,7 +171,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 **Purpose**: Gates that span stories and the artefacts a fresh session needs.
 
 - [X] T063 [P] Add the secret-leak suite in `test/secrets/secrets_test.go` — run the full offline corpus with `ZAMNIUS_MODEL_API_KEY=sk-test-canary`, then scan every artifact file, event payload, decision record, JSON envelope, and captured log line for the canary and for `Authorization` values, asserting zero findings (SC-014, FR-054)
-- [ ] T064 [P] Write the getting-started guide in `README.md` — install, the three formats, one single-phase run, one fan-out run, status, resume — meeting the 15-minute first-run target (SC-013)
+- [X] T064 [P] Write the getting-started guide in `README.md` — install, the three formats, one single-phase run, one fan-out run, status, resume — meeting the 15-minute first-run target (SC-013)
 - [ ] T065 [P] Add `CHANGELOG.md` recording the initial public contract set (`pkg/zamnius`) with a compatibility note stating the semver policy of [contracts/library-api.md](contracts/library-api.md) §5 (SC-016)
 - [ ] T066 [P] Document `examples/workflows/` — annotate each sample with the behaviour it demonstrates and link it from `README.md` and [quickstart.md](quickstart.md)
 - [ ] T067 Measure and record coverage — `internal/engine`, `internal/store/sqlite`, and `internal/audit` at ≥ 80% statements and no package below 60% — using `go test ./... -coverprofile=coverage.out` and record the result in [quickstart.md](quickstart.md) §Automated equivalents
@@ -306,6 +306,10 @@ starting the next task. Never batch several tasks into one turn or one commit.
 - `test/secrets` passes under `-race` and is verified non-vacuous by mutation in both directions
   (see T063 below); it runs the corpus through a real child process, so it costs one process spawn
   per batch rather than per command.
+- The T064 guide's transcripts are not prose: every console block was produced by running the built
+  `cmd/zamnius` against a local OpenAI-compatible stub, the resume drill included (a real `kill -9`,
+  a real exit `4` inside the lease window, and a real completion after it lapsed). The README's
+  relative links all resolve and its two YAML snippets are byte-identical to the shipped examples.
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -862,22 +866,60 @@ starting the next task. Never batch several tasks into one turn or one commit.
     findings; un-wrapping the provider-body redaction in `internal/model/openai/client.go` made the
     adversarial test fail on the hint and on stdout. Both mutations were reverted.
 
+- **T064** Getting-started guide — `README.md` rewritten (documentation only; no code, no test change).
+  It now covers install/build, provider configuration, the three definition formats, a single-phase run,
+  a fan-out run, status and artifact export, interrupt-and-resume, the `--json` envelope and the exit-code
+  table, the state directory and configuration precedence, the library entry point, the test suites, and
+  the increment's scope (SC-013).
+  - **Every transcript in it was produced, not written**: the built `cmd/zamnius` was run against a local
+    OpenAI-compatible stub on loopback (a throwaway `python3` HTTP server, never committed), and the
+    outputs pasted are that run's real output — the `run start` summary line and log lines, the human
+    `run status` block, the artifact listing and export, the `run.status` `--json` envelope (trimmed to
+    two of five `last_events` entries, with the trim stated in the text), the exit `5` refusal of a missing
+    key and of `invalid.yaml`, the exit `5` refusal of two discovered config files, the exit `2` usage
+    error, and the `version` line.
+  - **The resume drill is the verified one**: `slow.yaml` was started against a deliberately slow stub and
+    killed with `kill -9`; `run status` then reported `running` with `next: resume the run; phase draft was
+    interrupted`; an immediate `run resume` exited `4` with a hint naming the owner and the lease expiry;
+    after the 30-second lease lapsed, `run resume` exited `0` and completed the run (`1 phase, 2 attempts,
+    3 artifacts`). The events table quoted in the README is that drill's store read back with `sqlite3`,
+    and it shows the recovery shape: `details` committed at seq 6 and never restarted,
+    `run.taken_over`/`attempt.abandoned`/`run.resumed` at seq 8–10, only `outline` restarting, and the
+    `takeover`, `resume_restart`, and `join` decision records.
+  - **Checked mechanically**: every relative link in the README resolves to a file that exists, and both
+    embedded YAML snippets (`hello.yaml`, `fanout.yaml`) are byte-identical to the shipped examples.
+  - **Claims that needed precision**, verified against the code rather than assumed: a model key is
+    *always* required (the adapter refuses to construct without one; only the provider root is optional),
+    so the quickstart's "not needed for scenarios marked offline" wording describes the automated suites'
+    in-process fakes, not a keyless run; `outputs` kinds are constrained to
+    `plan, diff, report, evidence, aggregate, log, custom:<name>`; `on_failure: continue` records the phase
+    `degraded` and the run proceeds, while `abort` and `escalate` both stop the run as `failed` (there is
+    nothing to escalate *to* yet — roles and messaging are deferred); budgets are enforced for all three
+    kinds (`attempts`, `tokens`, `wall_clock`); and the failure-policy choice is a `failure_policy`
+    decision record.
+  - **Defects the verification surfaced** (recorded in the ledger below, not fixed here): a definition's
+    `model.base_url` is schema-validated but unconsumed, the exit-`4` lease message is doubly wrapped, and
+    quickstart scenarios 1 and 5 misdescribe the state layout and the budget fixture's exit code.
+
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
 Nothing outstanding: the last entries — T052 through T063 — are all covered.
 
 ### Not started
 
-- **T064–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
-  `CHANGELOG.md` does not exist.
+- **T065–T068** Polish — untouched. `CHANGELOG.md` does not exist yet (T065); T066 annotates
+  `examples/workflows/`, T067 records coverage, T068 runs the full verification sweep and the quickstart
+  scenarios.
 
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
 migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
 complete** (T054–T062): chain integrity, artifact integrity, completeness, reconstruction, the
 timeline/status/verification views, streaming chain verification, the broken-chain refusal, the orphan
-artifact sweep, the integrity-facing CLI, and the end-to-end golden assertions are all done. Polish has
-begun: **T063** closed the secret-leak suite. The next task is **T064**.
+artifact sweep, the integrity-facing CLI, and the end-to-end golden assertions are all done. Polish is
+under way: **T063** closed the secret-leak suite and **T064** replaced the placeholder README with the
+getting-started guide, whose every transcript was reproduced against a local OpenAI-compatible stub.
+The next task is **T065** (`CHANGELOG.md`).
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
@@ -907,7 +949,25 @@ begun: **T063** closed the secret-leak suite. The next task is **T064**.
 
 ### Known open defects to carry forward
 
-- `quickstart.md` scenario 1 runs `ls /tmp/zq1/runs`, which does not match the real state layout;
-  fix it when the scenarios are validated in T068.
-- `AGENTS.md`'s ADR range and `plan.md` line 225 still say `0001–0007`; update them if the range is
-  load-bearing (AGENTS.md was updated to `0001–0009` this session).
+- `quickstart.md` scenario 1 runs `ls /tmp/zq1/runs`, which does not match the real state layout
+  (`<state-dir>/zamnius.db` plus `<state-dir>/artifacts/<2 hex>/<sha256>`); fix it when the scenarios
+  are validated in T068.
+- `quickstart.md` scenario 5 asserts `exit 3` for `budget-tokens.yaml` (`budget: {tokens: 40}`). The
+  exit depends on how many tokens the provider reports: measured against a local stub answering
+  `prompt_tokens: 12, completion_tokens: 6`, the single attempt spends 18 tokens, the phase succeeds,
+  and the run exits `0` (T063's corpus asserts exactly that; T064's guide reflects it). The scenario
+  needs a provider that reports more than the budget, or a fixture whose budget is below one call.
+- `docs/domain_knowledge/adr/0007` and the constitution's principle numbering are consistent, but
+  `plan.md` line 225 (ADR range `0001–0007`) sits inside the deliberately point-in-time
+  `## Handoff State` snapshot, which is stale in several ways ("Not yet created: all source code").
+  Leave it as a snapshot or refresh the whole section deliberately; `AGENTS.md` already says
+  `0001–0009`, so nothing live is wrong.
+- A workflow's `agent.model.base_url` is accepted by the schema and validated as an absolute URI
+  (`internal/definition/validate.go`), but no code path consumes it: the adapter's provider root comes
+  only from `ZAMNIUS_MODEL_BASE_URL` (`internal/app/app.go`). A definition that sets it is silently
+  ignored rather than refused. Wire it through the registry or reject it at validation — T064's guide
+  therefore documents the environment variable only.
+- The exit-`4` lease refusal double-wraps its message: the CLI prints
+  `permanent: acquire lease for <id> as <owner>: permanent: run is owned by another live process: …`
+  with the same text repeated. The hint that follows is the actionable part (it names the owner and the
+  expiry), but the message itself should be unwrapped once.
