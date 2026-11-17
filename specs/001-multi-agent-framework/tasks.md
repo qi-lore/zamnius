@@ -174,7 +174,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 - [X] T064 [P] Write the getting-started guide in `README.md` — install, the three formats, one single-phase run, one fan-out run, status, resume — meeting the 15-minute first-run target (SC-013)
 - [X] T065 [P] Add `CHANGELOG.md` recording the initial public contract set (`pkg/zamnius`) with a compatibility note stating the semver policy of [contracts/library-api.md](contracts/library-api.md) §5 (SC-016)
 - [X] T066 [P] Document `examples/workflows/` — annotate each sample with the behaviour it demonstrates and link it from `README.md` and [quickstart.md](quickstart.md)
-- [ ] T067 Measure and record coverage — `internal/engine`, `internal/store/sqlite`, and `internal/audit` at ≥ 80% statements and no package below 60% — using `go test ./... -coverprofile=coverage.out` and record the result in [quickstart.md](quickstart.md) §Automated equivalents
+- [X] T067 Measure and record coverage — `internal/engine`, `internal/store/sqlite`, and `internal/audit` at ≥ 80% statements and no package below 60% — using `go test ./... -coverprofile=coverage.out` and record the result in [quickstart.md](quickstart.md) §Automated equivalents
 - [ ] T068 Run the full verification sweep and every quickstart scenario — `go build ./...`, `go vet ./...`, `go test ./... -count=1`, `go test ./... -race -count=1`, `CGO_ENABLED=0 go build ./...`, `go test ./test/recoverability -count=10` with zero flakes, and the eight manual scenarios in [quickstart.md](quickstart.md) — then record the outcome in [quickstart.md](quickstart.md) §Definition of done
 
 ---
@@ -317,6 +317,11 @@ starting the next task. Never batch several tasks into one turn or one commit.
   link and anchor across it, `README.md`, and `quickstart.md` resolves, the samples are byte-identical
   to the `test/testdata/workflows/` fixtures, and the `invalid.yaml` transcript is the built binary's
   real output.
+- Coverage (T067, 2026-11-17) meets the plan floor: `internal/engine` 84.1%, `internal/store/sqlite`
+  80.6%, `internal/audit` 85.5% (all ≥ 80%), whole module 84.0%, and no library package below 60%
+  (`internal/store/artifactfs` is the lowest at 67.9%). Measured with
+  `go test ./... -coverpkg=./... -coverprofile=coverage.out`; the plain `-coverprofile` reports
+  `internal/engine` and `internal/audit` at 0% because neither has an in-package test.
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -944,14 +949,33 @@ starting the next task. Never batch several tasks into one turn or one commit.
     `quickstart.md` resolves; the samples are byte-identical to the fixtures under
     `test/testdata/workflows/` (`diff -rq` clean), which the guide states.
 
+- **T067** Coverage measured and recorded — the measurement is in
+  [quickstart.md](quickstart.md) §Automated equivalents, and `internal/store/sqlite` was held to its
+  floor by two focused tests (`internal/store/sqlite/db_test.go`, `read_test.go`).
+  - **The measurement method matters**: `go test ./... -coverprofile=coverage.out` reports
+    `internal/engine` and `internal/audit` at **0%** — neither has an in-package test, so its coverage
+    is attributed from `test/integration`, `test/recoverability`, and `test/audit`. The recorded
+    command is therefore `go test ./... -coverpkg=./... -coverprofile=coverage.out`.
+  - **Result (2026-11-17)**: `internal/engine` 84.1%, `internal/store/sqlite` 80.6%,
+    `internal/audit` 85.5% — all ≥ 80% — and the whole module 84.0%. The lowest library package is
+    `internal/store/artifactfs` at 67.9%, above the 60% floor; the only package below the floor is
+    `cmd/zamnius` at 0%, a one-statement `main` that calls `os.Exit` and is excluded as untestable.
+  - **A shortfall the measurement surfaced, and closed**: `internal/store/sqlite` measured 79.4% on the
+    first pass, just under the floor. Two tests close it, both covering behaviour that had none:
+    `TestOpenRequiresAPathAndReportsIt` (`Open("")` is refused, `Path` reports the opened file, and
+    `Open` creates the containing directory) and `TestLoadRunToleratesALegacyTimestamp` (the read path
+    accepts an RFC3339Nano timestamp an older build wrote and refuses a genuinely unparseable one —
+    the tolerance `parseTime` documents in a comment). `parseTime` and `Path` now measure 100%.
+  - **Non-vacuity**: removing `parseTime`'s RFC3339Nano fallback makes
+    `TestLoadRunToleratesALegacyTimestamp` fail with the expected message; the mutation was reverted.
+
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052 through T066 — are all covered.
+Nothing outstanding: the last entries — T052 through T067 — are all covered.
 
 ### Not started
 
-- **T067–T068** Polish — untouched. T067 records coverage, T068 runs the full verification sweep and
-  the quickstart scenarios.
+- **T068** Polish — untouched. T068 runs the full verification sweep and the quickstart scenarios.
 
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
@@ -963,7 +987,9 @@ under way: **T063** closed the secret-leak suite, **T064** replaced the placehol
 getting-started guide, whose every transcript was reproduced against a local OpenAI-compatible stub,
 **T065** added `CHANGELOG.md` recording the initial public contract set and its semver policy, and
 **T066** added `examples/workflows/README.md`, annotating each sample with the behaviour it demonstrates
-and linking it from `README.md` and `quickstart.md`. The next task is **T067** (record coverage).
+and linking it from `README.md` and `quickstart.md`, and **T067** measured coverage and held
+`internal/store/sqlite` to its floor with two focused tests. The next task is **T068** (the full
+verification sweep and the quickstart scenarios).
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
