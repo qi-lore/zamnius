@@ -70,8 +70,12 @@ alone (constitution Principle II).
   the three formats, a single-phase run, a fan-out run, status and export, interrupt-and-resume, the
   `--json` envelope and exit table, the state directory, the library entry point, and the increment's
   scope); every console block in it was reproduced by running the built binary against a local
-  OpenAI-compatible stub, including the resume drill with a real `SIGKILL`. **The next task is T065**
-  (`CHANGELOG.md`, recording the public contract set). For the
+  OpenAI-compatible stub, including the resume drill with a real `SIGKILL`. T065 added `CHANGELOG.md`,
+  which records the initial public contract set of `pkg/zamnius` (all 98 exported package-level
+  identifiers) and states the compatibility policy of `contracts/library-api.md` §5 — additive changes
+  are minor, removing or changing an exported signature is major, every public contract change carries
+  a changelog note (SC-016), and `internal/` is not part of the contract. **The next task is T066**
+  (annotate `examples/workflows/`). For the
   exact per-task state — done,
   implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
