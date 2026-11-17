@@ -65,8 +65,13 @@ alone (constitution Principle II).
   value across the captured envelopes and logs, a byte sweep of every file the corpus wrote (artifacts,
   exports, the SQLite store and its WAL), and every event payload, decision, attempt, and artifact row
   read back through the store; an adversarial case proves a provider that echoes the rejected
-  credential still cannot push it into an error hint, an event, an attempt row, or a log line.
-  **The next task is T064** (`README.md`, the getting-started guide). For the
+  credential still cannot push it into an error hint, an event, an attempt row, or a log line. T064
+  replaced the placeholder `README.md` with the getting-started guide (install, provider configuration,
+  the three formats, a single-phase run, a fan-out run, status and export, interrupt-and-resume, the
+  `--json` envelope and exit table, the state directory, the library entry point, and the increment's
+  scope); every console block in it was reproduced by running the built binary against a local
+  OpenAI-compatible stub, including the resume drill with a real `SIGKILL`. **The next task is T065**
+  (`CHANGELOG.md`, recording the public contract set). For the
   exact per-task state — done,
   implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
