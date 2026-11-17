@@ -150,7 +150,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 ### Tests for User Story 3 (write first, must fail) ⚠️
 
 - [X] T054 [P] [US3] Write chain-integrity tests in `test/audit/chain_test.go` (with the shared `test/audit/harness_test.go`): verification over a clean run passes; a single mutated `payload`, `hash`, or `prev_hash` is detected at the correct `seq`; a deleted event is detected as a gap; `UPDATE`/`DELETE` on `events` is rejected at the schema level (US3 scenario 3)
-- [ ] T055 [P] [US3] Write artifact-integrity tests in `test/audit/artifact_test.go`: every referenced artifact verifies against its recorded `sha256` (US3 scenario 4); a corrupted file fails with exit `6` naming the file and expected digest; a row whose file is missing is an integrity failure and never triggers a silent re-run ([contracts/store.md](contracts/store.md) §5 step 3)
+- [X] T055 [P] [US3] Write artifact-integrity tests in `test/audit/artifact_test.go`: every referenced artifact verifies against its recorded `sha256` (US3 scenario 4); a corrupted file fails with exit `6` naming the file and expected digest; a row whose file is missing is an integrity failure and never triggers a silent re-run ([contracts/store.md](contracts/store.md) §5 step 3)
 - [ ] T056 [P] [US3] Write the audit completeness check in `test/audit/completeness_test.go` — every phase transition and every retry, escalation, budget stop, takeover, skip, and resume restart in the event log has a corresponding decision record whose `rationale` names the triggering condition, and every event carries an actor, timestamp, phase, and cause (SC-005, US3 scenarios 1 and 2)
 - [ ] T057 [P] [US3] Write the reconstruction test in `test/audit/reconstruct_test.go` — from the store alone, a reader derives current phase, completed branches, pending work, and next expected action for at least 20 sampled scenarios, including one paused mid-fan-out and one failed on an `all` join (SC-004, FR-023)
 
@@ -298,8 +298,8 @@ starting the next task. Never batch several tasks into one turn or one commit.
   verified non-vacuous by mutation (see T052 below).
 - The T053 pause-position test (`TestPauseRecordsTheResumePosition`) passes `-count=20` and under
   `-race` with no flakes; it is verified non-vacuous by mutation (see T053 below).
-- `test/audit` passes `-race -count=10`; the chain-integrity tests are verified non-vacuous by
-  mutation (see T054 below).
+- `test/audit` passes `-race -count=10`; the chain- and artifact-integrity tests are verified
+  non-vacuous by mutation (see T054 and T055 below).
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -585,23 +585,47 @@ starting the next task. Never batch several tasks into one turn or one commit.
     (all three fields) and the deleted-event test; the clean-run and schema-level tests are
     independent of that return, as they should be. The schema-level test is non-vacuous by
     construction: it requires an error and asserts the message names the trigger.
+- **T055** Artifact-integrity tests — `test/audit/artifact_test.go`, extending the shared harness
+  with the state-directory path so a test can read the file an operator would find:
+  - **A clean run's artifacts verify** — every row an ordered-plus-fan-out run committed is checked
+    three ways: `artifactfs.Verify` agrees, the file at the recorded `relative_path` hashes to the
+    recorded `sha256`, and its length equals `size_bytes`; `Engine.Verify` then reports `OK` with
+    the artifact count. Reading the file through the state directory (not the store's private root)
+    is what makes a wrong recorded path fail here.
+  - **A corrupted file exits 6 naming the file and digest** — a paused run (one committed phase with
+    an artifact, interrupted deterministically between phases) has its artifact bytes rewritten
+    behind the row. `Engine.Verify` reports a `digest_mismatch` for that `sha256` whose detail names
+    both the relative path and the expected digest; `zamnius run resume` then exits `6`, prints the
+    same two facts, appends exactly one `run.failed`, and executes no attempt.
+  - **A missing file fails integrity and never re-runs** — after removing the artifact file,
+    `Engine.Resume` returns an error wrapping `domain.ErrIntegrity`, the hint names the file and its
+    digest, the run is `failed`, no attempt is executed, and a second resume is a terminal no-op
+    that appends nothing (contracts/store.md §5 step 3, FR-018).
+  - **The design change it proved missing** — resume verified the event chain but never checked
+    artifact rows against their files, so a missing or altered artifact was silently reused and the
+    interrupted phase re-executed. `internal/engine/resume.go` now runs `audit.VerifyArtifacts` over
+    `Engine.Artifacts` before reconciliation and fails the run through `failOnIntegrity`, which is
+    the contract's step 3 and the same evidence path a broken chain already used.
+  - **Non-vacuousness by mutation**: with the artifact check removed, the corrupted test reaches a
+    model call and exits `3` and the missing-file test reports `Resume() accepted a run whose
+    artifact file is missing`; both fail as soon as the check is restored.
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052, T053, and T054 — are all covered.
+Nothing outstanding: the last entries — T052, T053, T054, and T055 — are all covered.
 ### Not started
 
-- **T055–T062** US3 — the chain-integrity half of verification is done (T054). The
-  artifact-integrity suite, the completeness check, the reconstruction suite, the audit views,
-  streaming verification as `Engine.Verify`, the orphan-artifact sweep, and the integrity-facing
-  CLI behaviour remain.
+- **T056–T062** US3 — both halves of verification are covered (T054 chain, T055 artifacts). The
+  completeness check, the reconstruction suite, the audit views, streaming verification as
+  `Engine.Verify`, the orphan-artifact sweep, and the integrity-facing CLI behaviour remain.
 - **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
   `CHANGELOG.md` does not exist.
 
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
 migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
-under way: T054 (chain integrity) is done.** The next task is **T055**.
+under way: T054 (chain integrity) and T055 (artifact integrity) are done.** The next task is
+**T056**.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
