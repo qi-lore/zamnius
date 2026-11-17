@@ -49,70 +49,101 @@ type ArtifactVerifier interface {
 	Verify(ctx context.Context, sha string) error
 }
 
-// VerifyChain recomputes every event hash and checks the links between events.
-// A deleted event shows up as a seq gap or as a prev_hash that points at a hash
-// no surviving event carries; both are reported, because silently accepting
-// either would make the record unfalsifiable.
+// ChainVerifier verifies an event chain as it arrives, one event at a time. It is
+// the streaming recomputation research.md R12 asks for: whether one event is intact
+// follows from that event and its predecessor's digest, so the verifier holds a
+// fixed amount of state — the previous digest, the previous seq, and the running
+// count — and never the whole log. A log longer than memory therefore verifies in a
+// single bounded pass, and there is exactly one implementation of the chain rule, so
+// the writer's verifier and the reader's cannot drift; the alternative, a set of
+// every digest, would cost O(n) memory to sharpen one message.
+type ChainVerifier struct {
+	prevHash string
+	prevSeq  int64
+	count    int
+	problems []Problem
+}
+
+// NewChainVerifier starts an empty verifier. Events must be added in seq order.
+func NewChainVerifier() *ChainVerifier { return &ChainVerifier{} }
+
+// Add checks one event against the chain so far and records any problem with it. It
+// recomputes the event's hash over its own recorded prev_hash, so a rewritten payload,
+// hash, or prev_hash all surface as a chain problem at that seq rather than as a
+// silently shorter log.
+func (v *ChainVerifier) Add(event domain.Event) {
+	phase := ""
+	if event.Phase != nil {
+		phase = *event.Phase
+	}
+	attemptID := ""
+	if event.AttemptID != nil {
+		attemptID = event.AttemptID.String()
+	}
+	recomputed, err := domain.EventHash(
+		event.PrevHash, event.RunID.String(), event.Type, event.Actor,
+		phase, attemptID, formatTS(event.TS), event.Payload,
+	)
+	switch {
+	case err != nil:
+		v.problems = append(v.problems, Problem{
+			Kind: ProblemChain, Seq: event.Seq,
+			Detail: fmt.Sprintf("event payload is not canonicalisable: %v", err),
+		})
+	case recomputed != event.Hash:
+		v.problems = append(v.problems, Problem{
+			Kind: ProblemChain, Seq: event.Seq,
+			Detail: fmt.Sprintf("hash mismatch: recorded %s, recomputed %s", event.Hash, recomputed),
+		})
+	}
+
+	if v.count == 0 {
+		if event.PrevHash != "" {
+			v.problems = append(v.problems, Problem{
+				Kind: ProblemChain, Seq: event.Seq,
+				Detail: fmt.Sprintf("first event has prev_hash %s, want empty", event.PrevHash),
+			})
+		}
+	} else {
+		if event.Seq <= v.prevSeq {
+			v.problems = append(v.problems, Problem{
+				Kind: ProblemChain, Seq: event.Seq,
+				Detail: fmt.Sprintf("seq is not increasing: %d follows %d", event.Seq, v.prevSeq),
+			})
+		}
+		if event.PrevHash != v.prevHash {
+			detail := fmt.Sprintf("prev_hash %s does not chain to seq %d (%s)", event.PrevHash, v.prevSeq, v.prevHash)
+			if event.Seq > v.prevSeq+1 {
+				detail = fmt.Sprintf(
+					"prev_hash %s does not chain to seq %d (%s); the seq gap between %d and %d suggests a deleted event",
+					event.PrevHash, v.prevSeq, v.prevHash, v.prevSeq, event.Seq)
+			}
+			v.problems = append(v.problems, Problem{Kind: ProblemChain, Seq: event.Seq, Detail: detail})
+		}
+	}
+
+	v.prevHash = event.Hash
+	v.prevSeq = event.Seq
+	v.count++
+}
+
+// Count is how many events the verifier has folded in.
+func (v *ChainVerifier) Count() int { return v.count }
+
+// Problems returns the chain problems found so far, in the order the events arrived.
+func (v *ChainVerifier) Problems() []Problem { return v.problems }
+
+// VerifyChain recomputes every event hash and checks the links between events by
+// folding the log through a ChainVerifier, one event at a time (R12). A deleted event
+// shows up as a seq gap or as a prev_hash that points at a digest no predecessor
+// carries; both are reported, because silently accepting either would make the record
+// unfalsifiable.
 func VerifyChain(events []domain.Event) []Problem {
-	problems := make([]Problem, 0)
-	byHash := make(map[string]domain.Event, len(events))
-	for _, event := range events {
-		byHash[event.Hash] = event
+	verifier := NewChainVerifier()
+	for i := range events {
+		verifier.Add(events[i])
 	}
-
-	for i, event := range events {
-		phase := ""
-		if event.Phase != nil {
-			phase = *event.Phase
-		}
-		attemptID := ""
-		if event.AttemptID != nil {
-			attemptID = event.AttemptID.String()
-		}
-		recomputed, err := domain.EventHash(
-			event.PrevHash, event.RunID.String(), event.Type, event.Actor,
-			phase, attemptID, formatTS(event.TS), event.Payload,
-		)
-		if err != nil {
-			problems = append(problems, Problem{
-				Kind: ProblemChain, Seq: event.Seq,
-				Detail: fmt.Sprintf("event payload is not canonicalisable: %v", err),
-			})
-			continue
-		}
-		if recomputed != event.Hash {
-			problems = append(problems, Problem{
-				Kind: ProblemChain, Seq: event.Seq,
-				Detail: fmt.Sprintf("hash mismatch: recorded %s, recomputed %s", event.Hash, recomputed),
-			})
-		}
-
-		if i == 0 {
-			if event.PrevHash != "" {
-				problems = append(problems, Problem{
-					Kind: ProblemChain, Seq: event.Seq,
-					Detail: fmt.Sprintf("first event has prev_hash %s, want empty", event.PrevHash),
-				})
-			}
-			continue
-		}
-
-		previous := events[i-1]
-		if event.Seq <= previous.Seq {
-			problems = append(problems, Problem{
-				Kind: ProblemChain, Seq: event.Seq,
-				Detail: fmt.Sprintf("seq is not increasing: %d follows %d", event.Seq, previous.Seq),
-			})
-		}
-		if event.PrevHash != previous.Hash {
-			detail := fmt.Sprintf("prev_hash %s does not chain to seq %d (%s)", event.PrevHash, previous.Seq, previous.Hash)
-			if _, survives := byHash[event.PrevHash]; survives {
-				detail = fmt.Sprintf("prev_hash %s chains to an event that is out of order; a seq gap suggests a deleted event", event.PrevHash)
-			}
-			problems = append(problems, Problem{Kind: ProblemChain, Seq: event.Seq, Detail: detail})
-		}
-	}
-	return problems
+	return verifier.Problems()
 }
 
 // VerifyArtifacts checks every recorded fingerprint against the bytes on disk.

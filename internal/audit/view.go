@@ -167,16 +167,23 @@ func Status(ctx context.Context, reader Reader, runID uuid.UUID) (StatusView, er
 // the state contract does not put on the store port (contracts/store.md §4), so the
 // caller owns its own read paths and the view stays a pure projection of them.
 //
+// The chain is recomputed by streaming the log through a ChainVerifier, one event at a
+// time (research.md R12), and the count comes from that same pass, so a run's verdict
+// and its event count cannot disagree.
+//
 // A report is returned even when a check fails, because the problems and the counts
 // are together the answer: a chain failure, a missing file, and a digest mismatch are
 // distinguished for the operator (contracts/cli.md §3).
 func Verify(ctx context.Context, runID uuid.UUID, events []domain.Event, refs []domain.ArtifactRef, verifier ArtifactVerifier, now time.Time) Report {
-	problems := VerifyChain(events)
-	problems = append(problems, VerifyArtifacts(ctx, refs, verifier)...)
+	chain := NewChainVerifier()
+	for i := range events {
+		chain.Add(events[i])
+	}
+	problems := append(chain.Problems(), VerifyArtifacts(ctx, refs, verifier)...)
 
 	return Report{
 		RunID:      runID,
-		Events:     len(events),
+		Events:     chain.Count(),
 		Artifacts:  len(refs),
 		VerifiedAt: now,
 		Problems:   problems,
