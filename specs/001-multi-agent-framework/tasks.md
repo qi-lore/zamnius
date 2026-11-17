@@ -156,7 +156,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 
 ### Implementation for User Story 3
 
-- [ ] T058 [US3] Implement the audit views in `internal/audit/view.go` — ordered timeline with decision records interleaved at their `seq`, run status view (run row + latest events + phase rows), reconstruction view (current position, completed and pending work, next expected action), and verification view (chain validity plus artifact fingerprints) — all computed on demand and never stored as a second source of truth
+- [X] T058 [US3] Implement the audit views in `internal/audit/view.go` — ordered timeline with decision records interleaved at their `seq`, run status view (run row + latest events + phase rows), reconstruction view (current position, completed and pending work, next expected action), and verification view (chain validity plus artifact fingerprints) — all computed on demand and never stored as a second source of truth
 - [ ] T059 [US3] Implement streaming chain and fingerprint verification — recompute `sha256(prev_hash || canonical(payload-with-metadata))` event by event, cross-check every artifact row against its file, and return a `VerifyReport` distinguishing chain failure, missing file, and digest mismatch — in `internal/audit/verify.go`, exposed as `Engine.Verify` in `pkg/zamnius/engine.go`
 - [ ] T060 [US3] Implement the orphan artifact sweep — identify files under the artifact root with no `artifacts` row, delete them only when no run is `running`, and return the count and bytes reclaimed — in `internal/store/artifactfs/sweep.go`, tested in `internal/store/artifactfs/sweep_test.go`; the command surface stays out of the CLI for this increment ([contracts/store.md](contracts/store.md) §4)
 - [ ] T061 [US3] Implement the integrity-facing CLI behaviour — `run artifacts --out <dir>` verifying each fingerprint before writing and aborting with exit `6` on mismatch, and `run status` reporting run status, current phase, per-phase status, attempt counts, budgets consumed, and the last five events in both human and `--json` form — in `internal/cli/artifacts.go` and `internal/cli/status.go`
@@ -300,7 +300,8 @@ starting the next task. Never batch several tasks into one turn or one commit.
   `-race` with no flakes; it is verified non-vacuous by mutation (see T053 below).
 - `test/audit` passes `-race -count=10`; the chain-integrity, artifact-integrity, and completeness
   tests are verified non-vacuous by mutation (see T054, T055, and T056 below). The reconstruction
-  suite passes `-race -count=5` and is verified non-vacuous by mutation (see T057 below).
+  suite passes `-race -count=5` and is verified non-vacuous by mutation (see T057 below); the audit
+  views suite passes `-race -count=5` and is verified non-vacuous by mutation (see T058 below).
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -563,8 +564,9 @@ starting the next task. Never batch several tasks into one turn or one commit.
     pause delta fails the between-phase test (`paused current_phase = 0x…, want "second"`); the red
     state was confirmed this way before the fix, and the between-phase test passes `-count=20`.
 - **T054** Chain-integrity tests — `test/audit/chain_test.go` plus the shared
-  `test/audit/harness_test.go`. Every test name starts with `TestVerify`, so the quickstart's
-  `go test ./test/audit -run TestVerify` selects all four:
+  `test/audit/harness_test.go`. Every test name in this package starts with `TestVerify`, so the
+  quickstart's `go test ./test/audit -run TestVerify` selects the whole audit suite as one unit (this
+  file, artifact, completeness, reconstruction, and — from T058 — views):
   - **A clean run verifies** — a three-phase run (ordered → three-branch `all` fan-out → ordered)
     is driven through a real store, artifact store, and engine; `audit.VerifyChain` reports no
     problem, every event's `prev_hash` equals its predecessor's stored `hash` (the link is present,
@@ -671,25 +673,68 @@ starting the next task. Never batch several tasks into one turn or one commit.
     interrupted-phase next action fails `paused_mid_phase` and `paused_mid_fanout` (both from the
     expectation and from the `Engine.Status` cross-check).
 
+- **T058** Audit views — `internal/audit/view.go` and `test/audit/views_test.go`. Three views
+  joined the reconstruction T057 landed; all four are computed on demand and never stored:
+  - **Timeline** — `BuildTimeline` (`TimelineEntry`, `Timeline`, `Kind()`) interleaves events and
+    decision records, and `TimelineOf` reads the pair from the store. Events keep `seq` order, the
+    record's only ordering authority; a decision record carries no sequence number of its own
+    (data-model.md §7), so it is placed where the transaction protocol fixes it: after the events its
+    commit wrote, which share its timestamp because one commit writes its events and its decisions
+    together, events first (contracts/store.md §1). A decision whose commit wrote no event — an
+    `on_failure: continue` degradation commits the policy decision alone — lands between its
+    neighbours.
+  - **Run status view** — `Status` (`StatusView`, `LatestEvents = 5`) reads the run row's fields, the
+    phase rows, and the newest events, and publishes the next action. `Engine.Status` now returns this
+    view by alias and delegates to it, so the CLI, the library, and a store reader get one derivation
+    and one vocabulary; the engine's private `nextAction` and its field-by-field projection are gone.
+  - **Verification view** — `Verify` composes `VerifyChain` and `VerifyArtifacts` into one `Report`
+    (counts plus `VerifiedAt`), and `Engine.Verify` delegates to it, keeping only its reads (including
+    the artifact-index fallback) and the failure log. `NextAction` is exported from the audit package
+    so the view and the engine cannot drift into two vocabularies.
+  - **The tests** sample the seven scenario shapes already in the corpus (clean fan-out, retry,
+    retries exhausted, `continue` degradation, a pause between phases, a lease takeover, a drift
+    override) and read them through `TimelineOf`, `Status`, and `Verify`: the timeline holds every
+    event once in `seq` order and every decision once, and no event is displaced across a decision's
+    commit boundary in either direction; the placement is pinned exactly for a retry, a join, a
+    `continue` policy decision (which has no event of its own) and a takeover; the status view is
+    compared field for field with `LoadRun`/`Phases`/the event tail and with `Engine.Status`; and one
+    verification report is asserted to carry both a chain failure and an artifact digest mismatch.
+    `BuildTimeline` is additionally pinned on hand-built records a store cannot be asked to produce:
+    a shared commit timestamp, a commit that wrote no event, and a regressed timestamp (which must
+    still leave the events in `seq` order).
+  - **Non-vacuousness by mutation**: appending every decision after every event fails all four
+    placement subtests and the corpus invariant for the six shapes that record a decision; returning
+    the head of the log instead of its tail fails the status view for all seven runs; dropping the
+    chain check from `Verify` fails the both-checks report; returning the events without their
+    decisions fails the timeline for the six shapes that record one.
+
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052, T053, T054, T055, T056, and T057 — are all covered.
+Nothing outstanding: the last entries — T052 through T058 — are all covered.
 ### Not started
 
-- **T058–T062** US3 — chain, artifact, and completeness verification and the reconstruction view are
-  covered (T054, T055, T056, T057). The timeline and run-status views, streaming verification as
-  `Engine.Verify`, the orphan-artifact sweep, and the integrity-facing CLI behaviour remain.
+- **T059–T062** US3 — the timeline, run-status, and verification views are covered (T058). Streaming
+  chain and fingerprint verification as `Engine.Verify`, the orphan-artifact sweep, and the
+  integrity-facing CLI behaviour remain.
 - **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
   `CHANGELOG.md` does not exist.
 
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
 migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
-under way: T054 (chain integrity), T055 (artifact integrity), T056 (completeness), and T057
-(reconstruction) are done.** The next task is **T058**.
+under way: T054 (chain integrity), T055 (artifact integrity), T056 (completeness), T057
+(reconstruction), and T058 (the timeline, run-status, and verification views) are done.** The next
+task is **T059**.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
+- The timeline's interleaving rule (`audit.BuildTimeline`, T058): a decision record carries no `seq`
+  (data-model.md §7) and a commit stamps its events and its decisions with one timestamp, so a decision
+  is placed after the events of its commit — the order the transaction protocol fixes
+  (contracts/store.md §1) — rather than by inventing a link the record does not hold. The caveat is
+  recorded with the rule: two distinct commits sharing a timestamp (possible with a coarse clock)
+  would put one commit's decision after the next commit's events, so the placement is documented as
+  the writer's order, not as a stored fact.
 - The fan-out aggregate (`persistAggregate`, `internal/engine/join.go`) projects branch outcomes
   **without** `attempt_no` (the local `branchSummary` type), so the `aggregate` artifact is
   byte-identical across a resume even when a branch restarts. The `join_result` record stored in
