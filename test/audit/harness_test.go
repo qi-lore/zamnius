@@ -28,13 +28,32 @@ type auditFixture struct {
 	engine    *engine.Engine
 	store     *sqlite.Store
 	artifacts *artifactfs.Store
-	client    *fakes.FuncClient
+	client    engine.Model
 }
 
-// newAuditFixture builds an isolated state directory and wires the same three
-// collaborators production wires, with a deterministic clock and id source so a
-// run's identifiers and attempt numbering are reproducible.
+// newAuditFixture builds a fixture whose model always succeeds. It is the common
+// case: a workflow that completes normally still has to produce a complete record.
 func newAuditFixture(t *testing.T) *auditFixture {
+	t.Helper()
+
+	// Content is keyed on the phase or branch the call belongs to, so a fan-out's
+	// branches produce distinct bytes (and therefore distinct content addresses)
+	// rather than deduping to one row.
+	return newAuditFixtureWithModel(t, fakes.NewFuncClient(func(req domain.ModelRequest) (domain.ModelResponse, error) {
+		return domain.ModelResponse{
+			Content:    "output of " + req.Metadata["attempt"],
+			Usage:      domain.Usage{InputTokens: 7, OutputTokens: 3},
+			StopReason: domain.StopEnd,
+		}, nil
+	}))
+}
+
+// newAuditFixtureWithModel builds an isolated state directory and wires the same
+// three collaborators production wires, with a deterministic clock and id source so
+// a run's identifiers and attempt numbering are reproducible. Callers supply the
+// model so a scenario can script the failure that drives a retry, an escalation, or
+// a budget stop; every other collaborator stays real.
+func newAuditFixtureWithModel(t *testing.T, client engine.Model) *auditFixture {
 	t.Helper()
 
 	layout := fakes.StateLayout(fakes.TempStateDir(t))
@@ -49,17 +68,6 @@ func newAuditFixture(t *testing.T) *auditFixture {
 	if err != nil {
 		t.Fatalf("open artifact store: %v", err)
 	}
-
-	// Content is keyed on the phase or branch the call belongs to, so a fan-out's
-	// branches produce distinct bytes (and therefore distinct content addresses)
-	// rather than deduping to one row.
-	client := fakes.NewFuncClient(func(req domain.ModelRequest) (domain.ModelResponse, error) {
-		return domain.ModelResponse{
-			Content:    "output of " + req.Metadata["attempt"],
-			Usage:      domain.Usage{InputTokens: 7, OutputTokens: 3},
-			StopReason: domain.StopEnd,
-		}, nil
-	})
 
 	eng, err := engine.New(engine.Options{
 		Store:     store,
@@ -128,6 +136,17 @@ func (f *auditFixture) events(runID uuid.UUID) []domain.Event {
 		f.t.Fatalf("Events() error = %v", err)
 	}
 	return events
+}
+
+// decisions reads a run's whole decision record set, in insertion order.
+func (f *auditFixture) decisions(runID uuid.UUID) []domain.Decision {
+	f.t.Helper()
+
+	decisions, err := f.store.Decisions(context.Background(), runID)
+	if err != nil {
+		f.t.Fatalf("Decisions() error = %v", err)
+	}
+	return decisions
 }
 
 // eventTypes lists a run's event types in seq order.
