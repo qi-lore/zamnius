@@ -158,7 +158,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 
 - [X] T058 [US3] Implement the audit views in `internal/audit/view.go` — ordered timeline with decision records interleaved at their `seq`, run status view (run row + latest events + phase rows), reconstruction view (current position, completed and pending work, next expected action), and verification view (chain validity plus artifact fingerprints) — all computed on demand and never stored as a second source of truth
 - [X] T059 [US3] Implement streaming chain and fingerprint verification — recompute `sha256(prev_hash || canonical(payload-with-metadata))` event by event, cross-check every artifact row against its file, and return a `VerifyReport` distinguishing chain failure, missing file, and digest mismatch — in `internal/audit/verify.go`, exposed as `Engine.Verify` in `pkg/zamnius/engine.go`
-- [ ] T060 [US3] Implement the orphan artifact sweep — identify files under the artifact root with no `artifacts` row, delete them only when no run is `running`, and return the count and bytes reclaimed — in `internal/store/artifactfs/sweep.go`, tested in `internal/store/artifactfs/sweep_test.go`; the command surface stays out of the CLI for this increment ([contracts/store.md](contracts/store.md) §4)
+- [X] T060 [US3] Implement the orphan artifact sweep — identify files under the artifact root with no `artifacts` row, delete them only when no run is `running`, and return the count and bytes reclaimed — in `internal/store/artifactfs/sweep.go`, tested in `internal/store/artifactfs/sweep_test.go`; the command surface stays out of the CLI for this increment ([contracts/store.md](contracts/store.md) §4)
 - [ ] T061 [US3] Implement the integrity-facing CLI behaviour — `run artifacts --out <dir>` verifying each fingerprint before writing and aborting with exit `6` on mismatch, and `run status` reporting run status, current phase, per-phase status, attempt counts, budgets consumed, and the last five events in both human and `--json` form — in `internal/cli/artifacts.go` and `internal/cli/status.go`
 - [ ] T062 [US3] Extend `test/integration/cli_test.go` with golden assertions for the enriched status view, artifact export verification, and exit `6` on a deliberately corrupted artifact file, so the audit surface is asserted through the same contract tests as the rest of the CLI
 
@@ -738,14 +738,41 @@ starting the next task. Never batch several tasks into one turn or one commit.
     streaming test's gap assertion; removing `audit.VerifyChain` from `Resume` fails the broken-chain
     test with `Resume() accepted a run whose event chain is broken`.
 
+- **T060** Orphan artifact sweep — `internal/store/artifactfs/sweep.go` and
+  `internal/store/artifactfs/sweep_test.go`. `Store.Sweep(ctx, Catalog)` reclaims the files the
+  mandated write order can orphan (contracts/store.md §4): content renamed and fsynced before its row
+  is inserted, so a crash between the two leaves an unreferenced file and never a row without content.
+  - **The port**: `Catalog` is the two facts a sweep needs — `AllArtifactSHA256` (every digest a row
+    references) and `RunningRuns` (whether any run is executing). Both already exist on the SQLite
+    store (T012/T014 wrote them for exactly this) and their doc comments say so, so the sweep composes
+    the two stores without `artifactfs` importing `sqlite`. The result is `SweepResult{Scanned,
+    Reclaimed, Bytes}`.
+  - **Refusal over guess**: while any run is running the sweep deletes nothing and returns
+    `ErrWorkInFlight`. The only inconsistency the write order can leave is a rename not yet met by its
+    committing row, and that window exists only while a run executes, so refusing makes the race
+    impossible rather than improbable; a caller may retry once the run stops.
+  - **Candidates are only what the store writes**: a shard directory is two lowercase hex characters
+    and a candidate is a 64-hex digest whose first two characters name its own directory. A file that is
+    not a content address, or a digest sitting in the wrong shard, is left untouched — the store never
+    writes it there and does not own it, so reclaiming it would be data loss. Temp files at the root
+    (`zamnius-artifact-*`) are out of scope: `Open`'s `sweepTemps` already removes them.
+  - **The tests**: a running run refuses (orphan survives, `Reclaimed == 0`, `ErrWorkInFlight`); a
+    terminal run reclaims two orphans with exact `Reclaimed`/`Bytes`, leaves the referenced file
+    verifiable, and counts it in `Scanned`; a non-digest file and a digest in the wrong shard survive
+    while one genuine orphan is reclaimed; a catalog error from either method is propagated with nothing
+    deleted. The refusal and the referenced-survives cases run through the real SQLite store so the two
+    helpers' wiring is proven non-vacuous; a `fakeCatalog` covers the error path and isolates the sweep.
+  - **Non-vacuousness by mutation**: turning the running-run guard off (`running > 0` → never) fails
+    `TestSweepRefusesWhileARunIsRunning`; dropping the shard-prefix check so any 64-hex name is a
+    candidate fails `TestSweepLeavesMalformedAndForeignFiles` (`Reclaimed = 2, want 1`).
+
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052 through T059 — are all covered.
+Nothing outstanding: the last entries — T052 through T060 — are all covered.
 ### Not started
 
-- **T060–T062** US3 — streaming chain and fingerprint verification and the broken-chain
-  `failOnIntegrity` path are covered (T059). The orphan-artifact sweep and the integrity-facing CLI
-  behaviour remain.
+- **T061–T062** US3 — the orphan-artifact sweep is covered (T060). The integrity-facing CLI behaviour
+  (`run artifacts`, enriched `run status`) and its contract tests remain.
 - **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
   `CHANGELOG.md` does not exist.
 
@@ -753,8 +780,9 @@ Nothing outstanding: the last entries — T052 through T059 — are all covered.
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
 migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
 under way: T054 (chain integrity), T055 (artifact integrity), T056 (completeness), T057
-(reconstruction), T058 (the timeline, run-status, and verification views), and T059 (streaming chain
-verification and the broken-chain refusal) are done.** The next task is **T060**.
+(reconstruction), T058 (the timeline, run-status, and verification views), T059 (streaming chain
+verification and the broken-chain refusal), and T060 (the orphan artifact sweep) are done.** The
+next task is **T061**.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
