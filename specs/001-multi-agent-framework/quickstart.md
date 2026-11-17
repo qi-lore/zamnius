@@ -157,6 +157,40 @@ Expected: no matches outside the process environment; `matches=1` from `rg` (no 
 `test/recoverability` re-execs the test binary as a child process so `SIGKILL` produces genuine
 process death rather than a simulated error (research R10).
 
+### Coverage
+
+The floor is set in [plan.md](plan.md) §Testing Strategy: `internal/engine`,
+`internal/store/sqlite`, and `internal/audit` at ≥ 80% of statements, and no package below 60%.
+
+```bash
+# Whole-module total. -coverpkg=./... is required: internal/engine and internal/audit
+# carry no in-package tests, so their coverage is attributed from test/integration,
+# test/recoverability, and test/audit; the plain per-package profile reports them at 0%.
+go test ./... -coverpkg=./... -coverprofile=coverage.out
+go tool cover -func=coverage.out | tail -1
+
+# Per-target figure (Go's own merge):
+go test ./... -coverpkg=github.com/prompt-fu/zamnius/internal/engine -coverprofile=engine.out
+go tool cover -func=engine.out | tail -1
+```
+
+Measured 2026-11-17:
+
+| Package | Floor | Measured |
+|---|---|---|
+| `internal/engine` | 80% | 84.1% |
+| `internal/store/sqlite` | 80% | 80.6% |
+| `internal/audit` | 80% | 85.5% |
+| whole module | — | 84.0% |
+
+The lowest library package is `internal/store/artifactfs` at 67.9%, above the 60% floor. The only
+package under the floor is `cmd/zamnius` at 0% — a one-statement `main` that calls `os.Exit`, so it is
+excluded as untestable, not as a gap. `internal/store/sqlite` is held to its floor by two tests added
+in T067: `TestOpenRequiresAPathAndReportsIt` (an empty path is refused, `Path` reports the opened file,
+and `Open` creates the containing directory) and `TestLoadRunToleratesALegacyTimestamp` (the read path
+accepts an RFC3339Nano timestamp and refuses an unparseable one). Both are non-vacuous — removing the
+`parseTime` fallback fails the second.
+
 ---
 
 ## Definition of done for this guide
