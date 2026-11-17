@@ -151,7 +151,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 
 - [X] T054 [P] [US3] Write chain-integrity tests in `test/audit/chain_test.go` (with the shared `test/audit/harness_test.go`): verification over a clean run passes; a single mutated `payload`, `hash`, or `prev_hash` is detected at the correct `seq`; a deleted event is detected as a gap; `UPDATE`/`DELETE` on `events` is rejected at the schema level (US3 scenario 3)
 - [X] T055 [P] [US3] Write artifact-integrity tests in `test/audit/artifact_test.go`: every referenced artifact verifies against its recorded `sha256` (US3 scenario 4); a corrupted file fails with exit `6` naming the file and expected digest; a row whose file is missing is an integrity failure and never triggers a silent re-run ([contracts/store.md](contracts/store.md) §5 step 3)
-- [ ] T056 [P] [US3] Write the audit completeness check in `test/audit/completeness_test.go` — every phase transition and every retry, escalation, budget stop, takeover, skip, and resume restart in the event log has a corresponding decision record whose `rationale` names the triggering condition, and every event carries an actor, timestamp, phase, and cause (SC-005, US3 scenarios 1 and 2)
+- [X] T056 [P] [US3] Write the audit completeness check in `test/audit/completeness_test.go` — every phase transition and every retry, escalation, budget stop, takeover, skip, and resume restart in the event log has a corresponding decision record whose `rationale` names the triggering condition, and every event carries an actor, timestamp, phase, and cause (SC-005, US3 scenarios 1 and 2)
 - [ ] T057 [P] [US3] Write the reconstruction test in `test/audit/reconstruct_test.go` — from the store alone, a reader derives current phase, completed branches, pending work, and next expected action for at least 20 sampled scenarios, including one paused mid-fan-out and one failed on an `all` join (SC-004, FR-023)
 
 ### Implementation for User Story 3
@@ -298,8 +298,8 @@ starting the next task. Never batch several tasks into one turn or one commit.
   verified non-vacuous by mutation (see T052 below).
 - The T053 pause-position test (`TestPauseRecordsTheResumePosition`) passes `-count=20` and under
   `-race` with no flakes; it is verified non-vacuous by mutation (see T053 below).
-- `test/audit` passes `-race -count=10`; the chain- and artifact-integrity tests are verified
-  non-vacuous by mutation (see T054 and T055 below).
+- `test/audit` passes `-race -count=10`; the chain-integrity, artifact-integrity, and completeness
+  tests are verified non-vacuous by mutation (see T054, T055, and T056 below).
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -609,14 +609,44 @@ starting the next task. Never batch several tasks into one turn or one commit.
   - **Non-vacuousness by mutation**: with the artifact check removed, the corrupted test reaches a
     model call and exits `3` and the missing-file test reports `Resume() accepted a run whose
     artifact file is missing`; both fail as soon as the check is restored.
+- **T056** Audit completeness check — `test/audit/completeness_test.go`, using an eight-run corpus
+  (clean fan-out, retry, escalation, token-budget stop, skip, lease takeover, reconciliation
+  restart, and a drift override) driven through real engines and stores with only the model
+  scripted. It separates the two claims SC-005 makes:
+  - **Every event is attributed** — valid type, actor in one of the three documented forms,
+    non-zero timestamp, a phase on every phase-scoped fact (and, when present on a run-level
+    fact, a phase the run actually declares), an attempt id on every `attempt.*`, a non-empty
+    payload, and the per-type cause key (`reason`, `error_class`, `unit`, `observed`, `sha256`,
+    or the equivalent fact). Every phase that reached a terminal state has exactly one terminal
+    event with a matching outcome payload and, unless skipped, at least one `phase.started`
+    before it.
+  - **Every choice is explained** — each decision carries a summary, rationale, timestamp and
+    non-empty evidence; the rationale names the triggering condition and the evidence exposes the
+    same condition; and the event the choice was made about is present (retry→`attempt.failed`
+    with the same attempt and class, failure policy→failed/degraded phase, budget→the exhausted
+    unit and `phase.budget_exhausted`, takeover→`run.taken_over` with the previous owner, skip→
+    `phase.skipped` with the observed outcome, join→a succeeded phase with `join_satisfied`,
+    restart→the abandoned attempt or the `decision.recorded` override). Every
+    `decision.recorded` event resolves to a decision of the same kind.
+  - **Interpretation recorded**: a phase transition is its event; the decision requirement is for
+    the non-trivial choices data-model.md §7 lists (retry, join, failure policy, budget stop,
+    takeover, skip, restart), which is what its invariant and SC-005 demand.
+  - **Corpus techniques**: the restart case writes the durable state a process killed mid-attempt
+    leaves — a running phase and a running attempt — then resumes, so reconciliation produces the
+    real `attempt.abandoned` and `resume_restart`; the drift case resumes with a supplied
+    definition whose fingerprint differs under `--allow-definition-drift`, which exercises the
+    operator actor and the `decision.recorded` path.
+  - **Non-vacuousness by mutation**: removing `reason` from the `run.succeeded` payload fails the
+    attribution test for five runs; weakening the retry rationale to "a provider error occurred"
+    fails the decision test for the retry and escalation runs.
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052, T053, T054, and T055 — are all covered.
+Nothing outstanding: the last entries — T052, T053, T054, T055, and T056 — are all covered.
 ### Not started
 
-- **T056–T062** US3 — both halves of verification are covered (T054 chain, T055 artifacts). The
-  completeness check, the reconstruction suite, the audit views, streaming verification as
+- **T057–T062** US3 — verification and completeness are covered (T054 chain, T055 artifacts, T056
+  completeness). The reconstruction suite, the audit views, streaming verification as
   `Engine.Verify`, the orphan-artifact sweep, and the integrity-facing CLI behaviour remain.
 - **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
   `CHANGELOG.md` does not exist.
@@ -624,8 +654,8 @@ Nothing outstanding: the last entries — T052, T053, T054, and T055 — are all
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
 migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
-under way: T054 (chain integrity) and T055 (artifact integrity) are done.** The next task is
-**T056**.
+under way: T054 (chain integrity), T055 (artifact integrity), and T056 (completeness) are done.**
+The next task is **T057**.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
