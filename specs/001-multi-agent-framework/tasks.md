@@ -160,7 +160,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 - [X] T059 [US3] Implement streaming chain and fingerprint verification — recompute `sha256(prev_hash || canonical(payload-with-metadata))` event by event, cross-check every artifact row against its file, and return a `VerifyReport` distinguishing chain failure, missing file, and digest mismatch — in `internal/audit/verify.go`, exposed as `Engine.Verify` in `pkg/zamnius/engine.go`
 - [X] T060 [US3] Implement the orphan artifact sweep — identify files under the artifact root with no `artifacts` row, delete them only when no run is `running`, and return the count and bytes reclaimed — in `internal/store/artifactfs/sweep.go`, tested in `internal/store/artifactfs/sweep_test.go`; the command surface stays out of the CLI for this increment ([contracts/store.md](contracts/store.md) §4)
 - [X] T061 [US3] Implement the integrity-facing CLI behaviour — `run artifacts --out <dir>` verifying each fingerprint before writing and aborting with exit `6` on mismatch, and `run status` reporting run status, current phase, per-phase status, attempt counts, budgets consumed, and the last five events in both human and `--json` form — in `internal/cli/artifacts.go` and `internal/cli/status.go`
-- [ ] T062 [US3] Extend `test/integration/cli_test.go` with golden assertions for the enriched status view, artifact export verification, and exit `6` on a deliberately corrupted artifact file, so the audit surface is asserted through the same contract tests as the rest of the CLI
+- [X] T062 [US3] Extend `test/integration/cli_test.go` with golden assertions for the enriched status view, artifact export verification, and exit `6` on a deliberately corrupted artifact file, so the audit surface is asserted through the same contract tests as the rest of the CLI
 
 **Checkpoint**: All three stories are independently functional; the audit record is provable and the reconstruction claim is tested.
 
@@ -802,26 +802,40 @@ starting the next task. Never batch several tasks into one turn or one commit.
     `TestExportArtifactsTreatsAMissingFileAsIntegrity` (exit becomes `1`, not `6`); removing the event
     tail from `humanStatus` fails `TestHumanStatusPrintsTheLastEvents`.
 
+- **T062** End-to-end golden assertions for the audit surface — `test/integration/cli_test.go` only, with
+  a `lastEventsOf` helper. The behaviour landed in T061; this task asserts it through the same contract
+  harness as the rest of the CLI: a real in-process run against the fake provider, then the commands.
+  - **Enriched status view** (`TestCLIStatusEnvelopeCarriesTheEnrichedView`): the `--json` run carries a
+    non-empty `next_action` and a `last_events` array of at most five events, each with `seq`, `type`,
+    `ts`, and `actor`, and including the terminal `run.succeeded`; the human form prints the same tail
+    under `last events:`.
+  - **Export verification** (`TestCLIArtifactsExportVerifiesEveryFingerprint`): a fan-out run (three
+    branches, an aggregate, a summary — five artifacts) is exported with `--out`, and every exported
+    `<kind>-<sha256>` file re-hashes to the digest the record gives and matches its recorded byte size.
+  - **Tamper evidence** (`TestCLIArtifactsExportAbortsOnACorruptedFile`): the stored content-addressed
+    file is overwritten with different bytes while its row and digest stand, and the export then exits
+    `6` with `ok: false`, an `error.message` and `error.hint` naming the digest, and an empty output
+    directory (no corrupt copy).
+  - **Non-vacuousness by mutation**: emptying the `last_events` projection in `viewOf`
+    (`internal/cli/render.go`) fails the status test; skipping the digest check in
+    `artifactfs.Store.Get` fails the tamper test (exit becomes `0`); making `exportArtifacts` write
+    nothing fails the export test (every file is missing).
+
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052 through T061 — are all covered.
+Nothing outstanding: the last entries — T052 through T062 — are all covered.
 ### Not started
 
-- **T062** US3 — the orphan-artifact sweep (T060) and the integrity-facing CLI (T061) are in place and
-  carry their focused unit tests. T062 adds the end-to-end golden assertions in
-  `test/integration/cli_test.go`: the enriched status view, artifact export verification, and exit `6`
-  on a deliberately corrupted artifact file, through the same contract tests as the rest of the CLI.
 - **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
   `CHANGELOG.md` does not exist.
 
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
 migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
-under way: T054 (chain integrity), T055 (artifact integrity), T056 (completeness), T057
-(reconstruction), T058 (the timeline, run-status, and verification views), T059 (streaming chain
-verification and the broken-chain refusal), T060 (the orphan artifact sweep), and T061 (artifact export
-verification and the enriched status view) are done.** The
-next task is **T062**.
+complete** (T054–T062): chain integrity, artifact integrity, completeness, reconstruction, the
+timeline/status/verification views, streaming chain verification, the broken-chain refusal, the orphan
+artifact sweep, the integrity-facing CLI, and the end-to-end golden assertions are all done. The
+next task is **T063**.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
