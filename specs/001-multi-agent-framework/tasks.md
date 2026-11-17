@@ -170,7 +170,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 
 **Purpose**: Gates that span stories and the artefacts a fresh session needs.
 
-- [ ] T063 [P] Add the secret-leak suite in `test/secrets/secrets_test.go` — run the full offline corpus with `ZAMNIUS_MODEL_API_KEY=sk-test-canary`, then scan every artifact file, event payload, decision record, JSON envelope, and captured log line for the canary and for `Authorization` values, asserting zero findings (SC-014, FR-054)
+- [X] T063 [P] Add the secret-leak suite in `test/secrets/secrets_test.go` — run the full offline corpus with `ZAMNIUS_MODEL_API_KEY=sk-test-canary`, then scan every artifact file, event payload, decision record, JSON envelope, and captured log line for the canary and for `Authorization` values, asserting zero findings (SC-014, FR-054)
 - [ ] T064 [P] Write the getting-started guide in `README.md` — install, the three formats, one single-phase run, one fan-out run, status, resume — meeting the 15-minute first-run target (SC-013)
 - [ ] T065 [P] Add `CHANGELOG.md` recording the initial public contract set (`pkg/zamnius`) with a compatibility note stating the semver policy of [contracts/library-api.md](contracts/library-api.md) §5 (SC-016)
 - [ ] T066 [P] Document `examples/workflows/` — annotate each sample with the behaviour it demonstrates and link it from `README.md` and [quickstart.md](quickstart.md)
@@ -303,6 +303,9 @@ starting the next task. Never batch several tasks into one turn or one commit.
   suite passes `-race -count=5` and is verified non-vacuous by mutation (see T057 below); the audit
   views suite passes `-race -count=5` and is verified non-vacuous by mutation (see T058 below); the
   streaming verification and broken-chain refusal pass `-race -count=5` (see T059 below).
+- `test/secrets` passes under `-race` and is verified non-vacuous by mutation in both directions
+  (see T063 below); it runs the corpus through a real child process, so it costs one process spawn
+  per batch rather than per command.
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -821,12 +824,51 @@ starting the next task. Never batch several tasks into one turn or one commit.
     `artifactfs.Store.Get` fails the tamper test (exit becomes `0`); making `exportArtifacts` write
     nothing fails the export test (every file is missing).
 
+- **T063** Secret-leak suite — `test/secrets/secrets_test.go` (new package `test/secrets`; no production
+  change). The suite runs the offline corpus with `ZAMNIUS_MODEL_API_KEY=sk-test-canary` and asserts the
+  canary and any `Authorization` value appear on no surface the corpus produced (SC-014, FR-054).
+  - **A child process, because the log surface is real**: `internal/app/app.go` binds the logger to
+    `os.Stderr` regardless of the writers `cli.Run` receives, so the shipped log lines can only be
+    captured across a process boundary. The suite re-executes its own test binary
+    (`TestSecretsChild`), which runs a batch of commands with `os.Stdout`/`os.Stderr` pointed at per-command
+    capture files, then calls the shipped `cli.Run` — the same entry point the `zamnius` binary uses. Two
+    spawns cover the whole corpus (the starts, then the inspection commands), which keeps the `-race` run
+    at ~5s instead of the ~24s a spawn-per-command design cost. The child reports only its own harness
+    failures; a command's non-zero exit is a corpus outcome the parent asserts.
+  - **The corpus** (`TestNoSecretLeaksFromTheOfflineCorpus`): the six valid shipped fixtures
+    (`hello.yaml`, `hello.json`, `hello.toml`, `fanout.yaml`, `slow.yaml`, `budget-tokens.yaml`, all exit
+    `0`), a `budget-stop` definition written from the test to reach a real `phase.budget_exhausted` +
+    `decision.budget_stop` (exit `3`), and the refused `invalid.yaml` (exit `5`) whose envelope and log
+    lines are still scanned. For every run that was created the suite then exercises the read path —
+    `run status --json`, `run artifacts --out <dir> --json` — and `run resume <id> --json` on a terminal
+    run. The provider is an `httptest` server (`answeringProvider`) reached only over loopback, so no
+    network is touched.
+  - **Every surface, four ways**: the captured stdout envelope and stderr log lines of each command; a
+    `filepath.WalkDir` byte sweep of the whole root (artifact files, the exported copies, the SQLite store
+    and its WAL); and a structured read-back through `sqlite.Open` of every run's events (`json.Marshal`,
+    which includes `Payload`), decisions (summary/rationale/evidence), attempts (`ErrorDetail` included),
+    and artifact rows — so a finding names the record it came from. Needles are the exact canary plus a
+    case-insensitive `authorization`; a bare `Bearer ` is deliberately not a needle because redaction
+    legitimately leaves `Bearer [REDACTED]`.
+  - **Adversarial half** (`TestRedactionSurvivesAProviderThatEchoesTheCredential`): the provider answers
+    HTTP `401` echoing the caller's `Authorization` value in its body. The suite asserts exit `3`, envelope
+    `error.class == "auth"`, and that `error.hint` contains `observability.RedactedValue` (`[REDACTED]`)
+    — a positive assertion, so a suite that stopped seeing the provider's text would fail — then asserts
+    zero findings across hint, event payload, attempt row, and log line.
+  - **Non-vacuousness**: the suite asserts the corpus was not empty (streams, log streams, files, runs,
+    events, decisions, attempts, artifacts all non-zero), and `TestTheScannerFindsEachForbiddenValue`
+    proves the needles match what they claim. Verified by mutation in both directions: returning early
+    from `observability.Redact` and logging the `Authorization` header made the corpus test report 14
+    findings; un-wrapping the provider-body redaction in `internal/model/openai/client.go` made the
+    adversarial test fail on the hint and on stdout. Both mutations were reverted.
+
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052 through T062 — are all covered.
+Nothing outstanding: the last entries — T052 through T063 — are all covered.
+
 ### Not started
 
-- **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
+- **T064–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
   `CHANGELOG.md` does not exist.
 
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
@@ -834,8 +876,8 @@ lease contention and takeover, attempt reconciliation, definition-drift refusal,
 migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
 complete** (T054–T062): chain integrity, artifact integrity, completeness, reconstruction, the
 timeline/status/verification views, streaming chain verification, the broken-chain refusal, the orphan
-artifact sweep, the integrity-facing CLI, and the end-to-end golden assertions are all done. The
-next task is **T063**.
+artifact sweep, the integrity-facing CLI, and the end-to-end golden assertions are all done. Polish has
+begun: **T063** closed the secret-leak suite. The next task is **T064**.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
