@@ -173,7 +173,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 - [X] T063 [P] Add the secret-leak suite in `test/secrets/secrets_test.go` — run the full offline corpus with `ZAMNIUS_MODEL_API_KEY=sk-test-canary`, then scan every artifact file, event payload, decision record, JSON envelope, and captured log line for the canary and for `Authorization` values, asserting zero findings (SC-014, FR-054)
 - [X] T064 [P] Write the getting-started guide in `README.md` — install, the three formats, one single-phase run, one fan-out run, status, resume — meeting the 15-minute first-run target (SC-013)
 - [X] T065 [P] Add `CHANGELOG.md` recording the initial public contract set (`pkg/zamnius`) with a compatibility note stating the semver policy of [contracts/library-api.md](contracts/library-api.md) §5 (SC-016)
-- [ ] T066 [P] Document `examples/workflows/` — annotate each sample with the behaviour it demonstrates and link it from `README.md` and [quickstart.md](quickstart.md)
+- [X] T066 [P] Document `examples/workflows/` — annotate each sample with the behaviour it demonstrates and link it from `README.md` and [quickstart.md](quickstart.md)
 - [ ] T067 Measure and record coverage — `internal/engine`, `internal/store/sqlite`, and `internal/audit` at ≥ 80% statements and no package below 60% — using `go test ./... -coverprofile=coverage.out` and record the result in [quickstart.md](quickstart.md) §Automated equivalents
 - [ ] T068 Run the full verification sweep and every quickstart scenario — `go build ./...`, `go vet ./...`, `go test ./... -count=1`, `go test ./... -race -count=1`, `CGO_ENABLED=0 go build ./...`, `go test ./test/recoverability -count=10` with zero flakes, and the eight manual scenarios in [quickstart.md](quickstart.md) — then record the outcome in [quickstart.md](quickstart.md) §Definition of done
 
@@ -313,6 +313,10 @@ starting the next task. Never batch several tasks into one turn or one commit.
 - The T065 changelog records the whole public contract: all 98 exported package-level identifiers of
   `pkg/zamnius` appear in it (zero missing, checked against the production sources) and both of its
   relative links resolve to files that exist.
+- The T066 example guide (`examples/workflows/README.md`) annotates all seven samples; every relative
+  link and anchor across it, `README.md`, and `quickstart.md` resolves, the samples are byte-identical
+  to the `test/testdata/workflows/` fixtures, and the `invalid.yaml` transcript is the built binary's
+  real output.
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -921,14 +925,33 @@ starting the next task. Never batch several tasks into one turn or one commit.
     relative links resolve to files that exist. The version line matches the build (`zamnius 0.1.0`,
     `api_version "1"`, `schema 1`); the entry is marked `unreleased` because no git tag exists.
 
+- **T066** Example workflows documented — `examples/workflows/README.md` added (documentation only; no
+  code, no test change). It annotates each of the seven samples with the behaviour it demonstrates and
+  is linked from `README.md` and [quickstart.md](quickstart.md).
+  - **What it covers**: the three formats (`hello.yaml`/`hello.json`/`hello.toml` decode to one
+    definition), the `all`-joined fan-out with a dependent phase (`fanout.yaml`), the interruption
+    drill (`slow.yaml`), the run-level token budget and retry policy with the budget-stop path
+    (`budget-tokens.yaml`), and the schema-refused definition with its exit `5` hint (`invalid.yaml`),
+    plus how to configure a provider and run a sample.
+  - **Verified, not asserted**: the six valid samples decode and validate — each reaches model-adapter
+    construction, so only the missing-key hint stands between the file and a run — and `invalid.yaml`
+    fails at validation with `hint: phases[0].mode: must be "single" or "fanout", got "parallel"`
+    (reproduced against the built binary; the transcript in the guide is that run's output). The
+    budget-stop and fan-out behaviour claims were checked against `test/integration` and
+    `test/secrets`, and the default `on_failure` is `abort` (`internal/definition/validate.go`), so an
+    exhausted budget fails the run with exit `3`.
+  - **Checked mechanically**: every relative link and anchor in the new guide, `README.md`, and
+    `quickstart.md` resolves; the samples are byte-identical to the fixtures under
+    `test/testdata/workflows/` (`diff -rq` clean), which the guide states.
+
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052 through T065 — are all covered.
+Nothing outstanding: the last entries — T052 through T066 — are all covered.
 
 ### Not started
 
-- **T066–T068** Polish — untouched. T066 annotates `examples/workflows/`, T067 records coverage, T068
-  runs the full verification sweep and the quickstart scenarios.
+- **T067–T068** Polish — untouched. T067 records coverage, T068 runs the full verification sweep and
+  the quickstart scenarios.
 
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
@@ -938,8 +961,9 @@ timeline/status/verification views, streaming chain verification, the broken-cha
 artifact sweep, the integrity-facing CLI, and the end-to-end golden assertions are all done. Polish is
 under way: **T063** closed the secret-leak suite, **T064** replaced the placeholder README with the
 getting-started guide, whose every transcript was reproduced against a local OpenAI-compatible stub,
-and **T065** added `CHANGELOG.md` recording the initial public contract set and its semver policy. The
-next task is **T066** (annotate `examples/workflows/`).
+**T065** added `CHANGELOG.md` recording the initial public contract set and its semver policy, and
+**T066** added `examples/workflows/README.md`, annotating each sample with the behaviour it demonstrates
+and linking it from `README.md` and `quickstart.md`. The next task is **T067** (record coverage).
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
