@@ -74,8 +74,12 @@ alone (constitution Principle II).
   which records the initial public contract set of `pkg/zamnius` (all 98 exported package-level
   identifiers) and states the compatibility policy of `contracts/library-api.md` §5 — additive changes
   are minor, removing or changing an exported signature is major, every public contract change carries
-  a changelog note (SC-016), and `internal/` is not part of the contract. **The next task is T066**
-  (annotate `examples/workflows/`). For the
+  a changelog note (SC-016), and `internal/` is not part of the contract. T066 added
+  `examples/workflows/README.md`, which annotates each of the seven samples with the behaviour it
+  demonstrates (the three formats, the `all`-joined fan-out with a dependent phase, the interruption
+  drill, the run-level token budget with the budget-stop path, and the schema-refused definition) and is
+  linked from `README.md` and `quickstart.md`. **The next task is T067** (record coverage: `internal/engine`,
+  `internal/store/sqlite`, and `internal/audit` at ≥ 80% statements, none below 60%). For the
   exact per-task state — done,
   implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
@@ -160,7 +164,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.implement # implement the NEXT single unchecked task (now T063), verify it, then STOP and report for review
+/speckit.implement # implement the NEXT single unchecked task (now T067), verify it, then STOP and report for review
 /speckit.analyze   # cross-artifact consistency check
 ```
 
