@@ -57,8 +57,16 @@ alone (constitution Principle II).
   aborts with exit `6` on a mismatch, and `run status` (`internal/cli/status.go`) prints the last five
   events in both forms. T062 locked the audit surface end to end: `test/integration/cli_test.go` now
   asserts the enriched status view, export verification of every fingerprint, and exit `6` on a
-  corrupted artifact file through the same contract harness as the rest of the CLI. **US3 is complete;
-  the next action is Polish, T063** (`test/secrets/secrets_test.go`, the secret-leak suite). For the
+  corrupted artifact file through the same contract harness as the rest of the CLI. **US3 is complete
+  and Polish has begun: T063 is done** — `test/secrets/secrets_test.go` (new package `test/secrets`,
+  no production change) runs the offline corpus with `ZAMNIUS_MODEL_API_KEY=sk-test-canary` in a real
+  child process (the composition root binds the logger to `os.Stderr`, so only a process boundary
+  captures the shipped log lines) and asserts zero findings for the canary and for any `Authorization`
+  value across the captured envelopes and logs, a byte sweep of every file the corpus wrote (artifacts,
+  exports, the SQLite store and its WAL), and every event payload, decision, attempt, and artifact row
+  read back through the store; an adversarial case proves a provider that echoes the rejected
+  credential still cannot push it into an error hint, an event, an attempt row, or a log line.
+  **The next task is T064** (`README.md`, the getting-started guide). For the
   exact per-task state — done,
   implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
@@ -76,8 +84,8 @@ alone (constitution Principle II).
   integration is a real 3-way merge. Add an ignore rule in one place and mirror the exact content;
   a divergent edit on a single branch is what re-introduces the conflict.
 - Source now exists: `cmd/zamnius`, `internal/{app,audit,cli,config,definition,domain,engine,fault,model,observability,store}`,
-  `pkg/zamnius`, and tests under `test/{fakes,integration,recoverability,testdata}`. No commit
-  may claim behaviour that has no test.
+  `pkg/zamnius`, and tests under `test/{audit,fakes,integration,recoverability,secrets,testdata}`. No
+  commit may claim behaviour that has no test.
 - Verification at this checkpoint is green, in order: `go build ./...`, `go vet ./...`,
   `go test ./... -count=1`, `go test ./... -race -count=1`, `CGO_ENABLED=0 go build ./...`.
 - Keep this section current when a phase completes: it is how a fresh session resumes
