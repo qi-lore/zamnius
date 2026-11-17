@@ -82,8 +82,16 @@ alone (constitution Principle II).
   `internal/store/sqlite` 80.6%, `internal/audit` 85.5% (all ≥ 80%), whole module 84.0%, no library
   package below 60% — and closed a 79.4% shortfall in `internal/store/sqlite` with two focused tests
   (`TestOpenRequiresAPathAndReportsIt`, `TestLoadRunToleratesALegacyTimestamp`); the measurement is
-  recorded in `quickstart.md` §Automated equivalents. **The next task is T068** (the full verification
-  sweep and the eight quickstart scenarios). For the
+  recorded in `quickstart.md` §Automated equivalents. T068 ran the full verification sweep — build,
+  vet, test, race, the pure-Go build, and `go test ./test/recoverability -count=10` with zero flakes —
+  and every quickstart scenario by hand against a local OpenAI-compatible stub, recording the outcome
+  in `quickstart.md` §Definition of done; the guide was the defect, not the code, so the scenario
+  `--file` paths (`testdata/workflows/…` → `test/testdata/workflows/…`), scenario 1's nonexistent
+  `runs/` listing, scenario 2's "exactly one aggregate", scenario 3's fixture (the delay-heavy
+  `slow.yaml`, not `fanout.yaml`) and its missing 30s lease wait, scenario 5 (a two-phase workflow,
+  because a single phase never reaches the budget), and the Automated-equivalents table's no-op
+  `-run` filter were all corrected. **Every task T001–T068 is done; the increment's task list is
+  complete.** For the
   exact per-task state — done,
   implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
@@ -168,7 +176,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.implement # implement the NEXT single unchecked task (now T068), verify it, then STOP and report for review
+/speckit.implement # implement the NEXT single unchecked task (all of T001–T068 are now done), verify it, then STOP and report for review
 /speckit.analyze   # cross-artifact consistency check
 ```
 
