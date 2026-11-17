@@ -78,8 +78,12 @@ alone (constitution Principle II).
   `examples/workflows/README.md`, which annotates each of the seven samples with the behaviour it
   demonstrates (the three formats, the `all`-joined fan-out with a dependent phase, the interruption
   drill, the run-level token budget with the budget-stop path, and the schema-refused definition) and is
-  linked from `README.md` and `quickstart.md`. **The next task is T067** (record coverage: `internal/engine`,
-  `internal/store/sqlite`, and `internal/audit` at ≥ 80% statements, none below 60%). For the
+  linked from `README.md` and `quickstart.md`. T067 measured coverage — `internal/engine` 84.1%,
+  `internal/store/sqlite` 80.6%, `internal/audit` 85.5% (all ≥ 80%), whole module 84.0%, no library
+  package below 60% — and closed a 79.4% shortfall in `internal/store/sqlite` with two focused tests
+  (`TestOpenRequiresAPathAndReportsIt`, `TestLoadRunToleratesALegacyTimestamp`); the measurement is
+  recorded in `quickstart.md` §Automated equivalents. **The next task is T068** (the full verification
+  sweep and the eight quickstart scenarios). For the
   exact per-task state — done,
   implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
@@ -164,7 +168,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.implement # implement the NEXT single unchecked task (now T067), verify it, then STOP and report for review
+/speckit.implement # implement the NEXT single unchecked task (now T068), verify it, then STOP and report for review
 /speckit.analyze   # cross-artifact consistency check
 ```
 
