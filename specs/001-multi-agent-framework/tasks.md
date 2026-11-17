@@ -175,7 +175,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 - [X] T065 [P] Add `CHANGELOG.md` recording the initial public contract set (`pkg/zamnius`) with a compatibility note stating the semver policy of [contracts/library-api.md](contracts/library-api.md) §5 (SC-016)
 - [X] T066 [P] Document `examples/workflows/` — annotate each sample with the behaviour it demonstrates and link it from `README.md` and [quickstart.md](quickstart.md)
 - [X] T067 Measure and record coverage — `internal/engine`, `internal/store/sqlite`, and `internal/audit` at ≥ 80% statements and no package below 60% — using `go test ./... -coverprofile=coverage.out` and record the result in [quickstart.md](quickstart.md) §Automated equivalents
-- [ ] T068 Run the full verification sweep and every quickstart scenario — `go build ./...`, `go vet ./...`, `go test ./... -count=1`, `go test ./... -race -count=1`, `CGO_ENABLED=0 go build ./...`, `go test ./test/recoverability -count=10` with zero flakes, and the eight manual scenarios in [quickstart.md](quickstart.md) — then record the outcome in [quickstart.md](quickstart.md) §Definition of done
+- [X] T068 Run the full verification sweep and every quickstart scenario — `go build ./...`, `go vet ./...`, `go test ./... -count=1`, `go test ./... -race -count=1`, `CGO_ENABLED=0 go build ./...`, `go test ./test/recoverability -count=10` with zero flakes, and the eight manual scenarios in [quickstart.md](quickstart.md) — then record the outcome in [quickstart.md](quickstart.md) §Definition of done
 
 ---
 
@@ -322,6 +322,10 @@ starting the next task. Never batch several tasks into one turn or one commit.
   (`internal/store/artifactfs` is the lowest at 67.9%). Measured with
   `go test ./... -coverpkg=./... -coverprofile=coverage.out`; the plain `-coverprofile` reports
   `internal/engine` and `internal/audit` at 0% because neither has an in-package test.
+- The T068 sweep is green in order (see T068 below): `go build ./...`, `go vet ./...`,
+  `go test ./... -count=1`, `go test ./... -race -count=1`, `CGO_ENABLED=0 go build ./...`, and
+  `go test ./test/recoverability -count=10` with zero flakes; all eight quickstart scenarios were then
+  reproduced by hand with the built binary against a local OpenAI-compatible stub.
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -969,27 +973,59 @@ starting the next task. Never batch several tasks into one turn or one commit.
   - **Non-vacuity**: removing `parseTime`'s RFC3339Nano fallback makes
     `TestLoadRunToleratesALegacyTimestamp` fail with the expected message; the mutation was reverted.
 
+- **T068** Full verification sweep and all eight quickstart scenarios run and recorded in
+  [quickstart.md](quickstart.md) §Definition of done.
+  - **Sweep, in order, green**: `go build ./...`, `go vet ./...`, `go test ./... -count=1`,
+    `go test ./... -race -count=1`, `CGO_ENABLED=0 go build ./...`, and
+    `go test ./test/recoverability -count=10` (zero flakes).
+  - **The eight scenarios** were each reproduced by hand with the built binary
+    (`CGO_ENABLED=0 go build -o bin/zamnius ./cmd/zamnius`) against a local OpenAI-compatible stub: 1
+    single-phase (exit `0`, digest matches), 2 fan-out (3 overlapping branches, ordered join
+    aggregate), 3 interrupt/resume (real `kill -9`, exit `4` inside the lease window, exit `0` after
+    it lapsed, the committed branch reused, `attempt.abandoned` + `resume_restart` recorded), 4
+    concurrent resume (exit `4`, owner named), 5 budget (exit `3`, `budget_stop` names `tokens`), 6
+    audit (export verifies, a corrupted stored artifact exits `6`), 7 parity/rejection (three formats
+    equivalent, `invalid.yaml` exits `5` naming `phases[0].mode`), 8 secrets (`rg` finds no canary).
+  - **The guide was the defect, not the code**, and was corrected: the scenario `--file` paths
+    (`testdata/workflows/…` → `test/testdata/workflows/…`); scenario 1's nonexistent `runs/` listing;
+    scenario 2's "exactly one aggregate" (there are four); scenario 3's fixture (`fanout.yaml` has no
+    delay to interrupt → the delay-heavy `slow.yaml`) and the missing 30s lease wait; scenario 5 (see
+    below); and the Automated-equivalents table, whose `-run 'TestRun|TestBudget|TestConfig'` matched
+    no test and is replaced with the names that cover each scenario. The table's corrected
+    invocations were each run and pass.
+  - **Scenario 5 was the substantive fix**: the shipped `budget-tokens.yaml` is a single phase that
+    finishes in one call, so its 40-token run budget is never reached and the run succeeds (exit `0`).
+    A budget is checked *before* an attempt starts, never after one finishes, so **neither** "a
+    provider that reports more than the budget" **nor** "a budget below one call" fixes a single-phase
+    run — the pre-attempt spend is still zero. The scenario now runs a two-phase workflow whose first
+    phase spends past the budget, which is the shape the stop needs, and records exit `3`,
+    `phase.budget_exhausted` naming `tokens`, and a `budget_stop` decision.
+  - **Left as a decision, not changed**: `budget-tokens.yaml` is described as "the budget-stop path" in
+    `examples/workflows/README.md` but cannot reach the stop as a single phase; `test/secrets` already
+    documents that it succeeds ("the 40-token budget survives one 18-token call"). Making the fixture
+    two-phase would let it reach the stop but would change the secrets corpus expectation.
+
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
 Nothing outstanding: the last entries — T052 through T067 — are all covered.
 
 ### Not started
 
-- **T068** Polish — untouched. T068 runs the full verification sweep and the quickstart scenarios.
+Nothing: **T068** was the last task, and all 68 are now done. The increment's task list is complete.
 
 **US2 is complete** (T043–T053): recovery is proven at four interruption points, a real `SIGKILL`,
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
 migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
 complete** (T054–T062): chain integrity, artifact integrity, completeness, reconstruction, the
 timeline/status/verification views, streaming chain verification, the broken-chain refusal, the orphan
-artifact sweep, the integrity-facing CLI, and the end-to-end golden assertions are all done. Polish is
-under way: **T063** closed the secret-leak suite, **T064** replaced the placeholder README with the
+artifact sweep, the integrity-facing CLI, and the end-to-end golden assertions are all done. **Polish
+is complete**: **T063** closed the secret-leak suite, **T064** replaced the placeholder README with the
 getting-started guide, whose every transcript was reproduced against a local OpenAI-compatible stub,
-**T065** added `CHANGELOG.md` recording the initial public contract set and its semver policy, and
-**T066** added `examples/workflows/README.md`, annotating each sample with the behaviour it demonstrates
-and linking it from `README.md` and `quickstart.md`, and **T067** measured coverage and held
-`internal/store/sqlite` to its floor with two focused tests. The next task is **T068** (the full
-verification sweep and the quickstart scenarios).
+**T065** added `CHANGELOG.md` recording the initial public contract set and its semver policy, **T066**
+added `examples/workflows/README.md`, annotating each sample with the behaviour it demonstrates and
+linking it from `README.md` and `quickstart.md`, **T067** measured coverage and held
+`internal/store/sqlite` to its floor with two focused tests, and **T068** ran the full verification
+sweep and every quickstart scenario, correcting the guide where it disagreed with the code.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
@@ -1019,14 +1055,15 @@ verification sweep and the quickstart scenarios).
 
 ### Known open defects to carry forward
 
-- `quickstart.md` scenario 1 runs `ls /tmp/zq1/runs`, which does not match the real state layout
-  (`<state-dir>/zamnius.db` plus `<state-dir>/artifacts/<2 hex>/<sha256>`); fix it when the scenarios
-  are validated in T068.
-- `quickstart.md` scenario 5 asserts `exit 3` for `budget-tokens.yaml` (`budget: {tokens: 40}`). The
-  exit depends on how many tokens the provider reports: measured against a local stub answering
-  `prompt_tokens: 12, completion_tokens: 6`, the single attempt spends 18 tokens, the phase succeeds,
-  and the run exits `0` (T063's corpus asserts exactly that; T064's guide reflects it). The scenario
-  needs a provider that reports more than the budget, or a fixture whose budget is below one call.
+- `quickstart.md` scenario 1 ran `ls /tmp/zq1/runs`, which does not match the real state layout
+  (`<state-dir>/zamnius.db` plus `<state-dir>/artifacts/<2 hex>/<sha256>`). **Fixed in T068**: the
+  scenario now takes the run id from the start command's final line.
+- `quickstart.md` scenario 5 asserted `exit 3` for `budget-tokens.yaml` (`budget: {tokens: 40}`). The
+  recorded suggestion — a provider that reports more than the budget — is **not sufficient**: the
+  engine checks a budget before an attempt starts, never after one finishes, so a single-phase run
+  overspends and still succeeds (measured: 50 tokens against 40, exit `0`). **Fixed in T068** by
+  running a two-phase workflow whose first phase spends past the budget, which is the shape the stop
+  needs; the shipped fixture is left as it is (see the T068 entry).
 - `docs/domain_knowledge/adr/0007` and the constitution's principle numbering are consistent, but
   `plan.md` line 225 (ADR range `0001–0007`) sits inside the deliberately point-in-time
   `## Handoff State` snapshot, which is stale in several ways ("Not yet created: all source code").
