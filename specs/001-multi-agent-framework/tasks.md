@@ -157,7 +157,7 @@ Single Go module `github.com/prompt-fu/zamnius`, per [plan.md](plan.md) §Projec
 ### Implementation for User Story 3
 
 - [X] T058 [US3] Implement the audit views in `internal/audit/view.go` — ordered timeline with decision records interleaved at their `seq`, run status view (run row + latest events + phase rows), reconstruction view (current position, completed and pending work, next expected action), and verification view (chain validity plus artifact fingerprints) — all computed on demand and never stored as a second source of truth
-- [ ] T059 [US3] Implement streaming chain and fingerprint verification — recompute `sha256(prev_hash || canonical(payload-with-metadata))` event by event, cross-check every artifact row against its file, and return a `VerifyReport` distinguishing chain failure, missing file, and digest mismatch — in `internal/audit/verify.go`, exposed as `Engine.Verify` in `pkg/zamnius/engine.go`
+- [X] T059 [US3] Implement streaming chain and fingerprint verification — recompute `sha256(prev_hash || canonical(payload-with-metadata))` event by event, cross-check every artifact row against its file, and return a `VerifyReport` distinguishing chain failure, missing file, and digest mismatch — in `internal/audit/verify.go`, exposed as `Engine.Verify` in `pkg/zamnius/engine.go`
 - [ ] T060 [US3] Implement the orphan artifact sweep — identify files under the artifact root with no `artifacts` row, delete them only when no run is `running`, and return the count and bytes reclaimed — in `internal/store/artifactfs/sweep.go`, tested in `internal/store/artifactfs/sweep_test.go`; the command surface stays out of the CLI for this increment ([contracts/store.md](contracts/store.md) §4)
 - [ ] T061 [US3] Implement the integrity-facing CLI behaviour — `run artifacts --out <dir>` verifying each fingerprint before writing and aborting with exit `6` on mismatch, and `run status` reporting run status, current phase, per-phase status, attempt counts, budgets consumed, and the last five events in both human and `--json` form — in `internal/cli/artifacts.go` and `internal/cli/status.go`
 - [ ] T062 [US3] Extend `test/integration/cli_test.go` with golden assertions for the enriched status view, artifact export verification, and exit `6` on a deliberately corrupted artifact file, so the audit surface is asserted through the same contract tests as the rest of the CLI
@@ -301,7 +301,8 @@ starting the next task. Never batch several tasks into one turn or one commit.
 - `test/audit` passes `-race -count=10`; the chain-integrity, artifact-integrity, and completeness
   tests are verified non-vacuous by mutation (see T054, T055, and T056 below). The reconstruction
   suite passes `-race -count=5` and is verified non-vacuous by mutation (see T057 below); the audit
-  views suite passes `-race -count=5` and is verified non-vacuous by mutation (see T058 below).
+  views suite passes `-race -count=5` and is verified non-vacuous by mutation (see T058 below); the
+  streaming verification and broken-chain refusal pass `-race -count=5` (see T059 below).
 - The T045 suite and the store lease tests pass with `-count=5`; the cross-connection lease test is
   verified non-vacuous by reverting the DSN (it fails with `SQLITE_BUSY` on the deferred form).
 - Branch `001-multi-agent-framework`; all commits local — nothing is pushed. The session of 2026-11-12 added
@@ -324,9 +325,10 @@ starting the next task. Never batch several tasks into one turn or one commit.
   version, refuses definition drift, takes the lease, verifies the event chain
   (`audit.VerifyChain`), reconciles attempts, then drives from the current position. Exercised
   end-to-end by the T043 suite.
-  - **Residual coverage gap**: the `failOnIntegrity` path on a broken chain is not yet asserted by a
-    dedicated test; T059 must cover it. (The other failure path, the pause with a recorded reason, is
-    now asserted by T057's `paused_between_phases` and `paused_*` scenarios.)
+  - **Residual coverage gap**: the `failOnIntegrity` path on a broken chain is now asserted by a
+    dedicated test — T059's `TestResumeRefusesABrokenChainWithoutRerunning` (T046 left it open). (The
+    other failure path, the pause with a recorded reason, is asserted by T057's `paused_between_phases`
+    and `paused_*` scenarios.)
 - **T044** Genuine process-death harness — `test/recoverability/sigkill_test.go`. `TestMain` re-executes
   the test binary as a child (`ZAMNIUS_SIGKILL_CHILD=1`); the child wires the engine through the same
   `newInstance` path the in-process tests use, starts the fan-out definition, answers one branch, blocks
@@ -707,15 +709,43 @@ starting the next task. Never batch several tasks into one turn or one commit.
     the head of the log instead of its tail fails the status view for all seven runs; dropping the
     chain check from `Verify` fails the both-checks report; returning the events without their
     decisions fails the timeline for the six shapes that record one.
+- **T059** Streaming chain and fingerprint verification — `internal/audit/verify.go`, exercised by
+  `test/audit/chain_test.go`. The verification view T058 landed now recomputes the chain the way
+  research R12 asks: event by event, through a `ChainVerifier` that decides each event from its own
+  content and its predecessor's digest, so the verifier holds fixed state — previous digest, previous
+  `seq`, running count — rather than a set of every digest. `VerifyChain` is now the streaming fold
+  over that verifier, so there is one implementation of the chain rule and the slice form and the
+  stream cannot drift, and `Verify` derives its verdict and its event count from the same pass.
+  `Engine.Verify` (already exposed as `pkg/zamnius.VerifyReport`) needed no change: it hands the view
+  the facts and records the failure.
+  - **What was actually left for T059**: the composition of chain and fingerprint checks into one
+    `Report` landed with the T058 view, so T059's delta is the streaming property plus the
+    broken-chain refusal below. The first cut built a map of every event hash (`byHash`, O(n) memory)
+    purely to sharpen one message; the streaming verifier drops it, and a hole is now named as a `seq`
+    gap as well as a broken `prev_hash` link — the signal a streaming verifier can produce from the
+    predecessor alone.
+  - **The tests**: a real clean run is folded through a fresh verifier one `Add` at a time and asserted
+    equal to `VerifyChain`, with the count pinned; a tampered event is caught from the event and its
+    predecessor alone; a hole is caught over the survivors alone and its detail names the `seq` gap.
+  - **The broken-chain `failOnIntegrity` path** (the residual gap T046 left open) is now covered:
+    `TestResumeRefusesABrokenChainWithoutRerunning` forges a successor row with a direct `INSERT` — the
+    schema rejects `UPDATE`/`DELETE` on `events`, so that is the one way to tamper — whose recorded
+    `hash` is not the digest of its own content. `Resume` refuses with `ErrIntegrity`, fails the run,
+    appends exactly one `run.failed`, executes no attempt, keeps the forged row as evidence, and is a
+    terminal no-op the second time.
+  - **Non-vacuousness by mutation**: dropping the hash-mismatch report fails the streaming test and the
+    broken-chain resume test (and T054's payload/hash cases); dropping the `seq`-gap detail fails the
+    streaming test's gap assertion; removing `audit.VerifyChain` from `Resume` fails the broken-chain
+    test with `Resume() accepted a run whose event chain is broken`.
 
 ### Implemented but NOT yet covered by a dedicated test (left unchecked)
 
-Nothing outstanding: the last entries — T052 through T058 — are all covered.
+Nothing outstanding: the last entries — T052 through T059 — are all covered.
 ### Not started
 
-- **T059–T062** US3 — the timeline, run-status, and verification views are covered (T058). Streaming
-  chain and fingerprint verification as `Engine.Verify`, the orphan-artifact sweep, and the
-  integrity-facing CLI behaviour remain.
+- **T060–T062** US3 — streaming chain and fingerprint verification and the broken-chain
+  `failOnIntegrity` path are covered (T059). The orphan-artifact sweep and the integrity-facing CLI
+  behaviour remain.
 - **T063–T068** Polish — untouched. `README.md` exists but is not yet the getting-started guide;
   `CHANGELOG.md` does not exist.
 
@@ -723,8 +753,8 @@ Nothing outstanding: the last entries — T052 through T058 — are all covered.
 lease contention and takeover, attempt reconciliation, definition-drift refusal, schema-version
 migration/refusal, the `run resume` command, signal handling, and now the paused position. **US3 is
 under way: T054 (chain integrity), T055 (artifact integrity), T056 (completeness), T057
-(reconstruction), and T058 (the timeline, run-status, and verification views) are done.** The next
-task is **T059**.
+(reconstruction), T058 (the timeline, run-status, and verification views), and T059 (streaming chain
+verification and the broken-chain refusal) are done.** The next task is **T060**.
 
 ### Design decisions made while implementing (not yet written as ADRs)
 
