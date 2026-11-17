@@ -33,14 +33,15 @@ alone (constitution Principle II).
 - Plan, research, data model, contracts, quickstart, and **`tasks.md`** are committed.
 - `tasks.md` holds **68 TDD tasks in six phases**: Setup T001–T005, Foundational T006–T019
   (blocks every story), US1 T020–T042, US2 T043–T053, US3 T054–T062, Polish T063–T068.
-- **Implementation is well under way: T001–T058 are done and tested, so US1 and US2 are complete and
+- **Implementation is well under way: T001–T059 are done and tested, so US1 and US2 are complete and
   US3 is more than half done** — the recoverability proofs (four commit-boundary interruption points, a genuine
   `SIGKILL`, ownership/lease takeover, attempt reconciliation, lease heartbeat, definition-drift
   refusal, schema-version migration/refusal, the `run resume` command, signal handling, and the
   paused position) are all in place and committed, and US3's audit suite
   (`test/audit/{chain,artifact,completeness,reconstruct,views}_test.go` over the shared
   `test/audit/harness_test.go`, selected by `go test ./test/audit -run TestVerify`) is green: chain
-  integrity, artifact integrity, an eight-run completeness corpus covering every decision kind, a
+  integrity — recomputed event by event through a streaming `audit.ChainVerifier` — artifact
+  integrity, an eight-run completeness corpus covering every decision kind, a
   22-run reconstruction corpus over `internal/audit/view.go` (a reader handed only the store states
   the position, completed and pending work, and the next action), and the remaining views — the
   ordered timeline with decisions interleaved at their commit, the run status view (`Status`/
@@ -48,9 +49,9 @@ alone (constitution Principle II).
   which `Engine.Verify` delegates to). T055 also
   closed a contract gap: resume now verifies every artifact row against its file before
   reconciliation, so a corrupted or missing artifact fails the run with evidence instead of being
-  silently reused (store.md §5 step 3). **The next action is to continue US3 at T059** (streaming
-  chain and fingerprint verification as `Engine.Verify`, which also owes the `failOnIntegrity`
-  test on a broken chain). For the exact per-task state — done,
+  silently reused (store.md §5 step 3). T059 closed the companion gap: resume's `failOnIntegrity`
+  path on a broken chain now has its dedicated test. **The next action is to continue US3 at T060**
+  (the orphan artifact sweep in `internal/store/artifactfs/sweep.go`). For the exact per-task state — done,
   implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
   boxes above it are updated.
@@ -134,7 +135,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.implement # implement the NEXT single unchecked task (now T059), verify it, then STOP and report for review
+/speckit.implement # implement the NEXT single unchecked task (now T060), verify it, then STOP and report for review
 /speckit.analyze   # cross-artifact consistency check
 ```
 
