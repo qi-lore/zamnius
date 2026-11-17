@@ -1,14 +1,16 @@
 package audit
 
-// The reconstruction view: what a reader who was not present during a run can state
-// from persisted records alone (FR-023, SC-004, data-model.md §8). Like every view in
-// this package it is computed on demand and never stored — a cached projection is
-// exactly what an auditor cannot trust (Principle III).
+// The audit views: what a reader who was not present during a run can state from
+// persisted records alone — the ordered timeline, the position and the work still owed
+// (FR-023, SC-004, data-model.md §8), the run status report, and the verification view.
+// Like every view in this package each is computed on demand and never stored — a
+// cached projection is exactly what an auditor cannot trust (Principle III).
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -16,13 +18,169 @@ import (
 	"github.com/prompt-fu/zamnius/internal/domain"
 )
 
-// Reader is the slice of the store the reconstruction needs (contracts/store.md §2).
-// It is a port rather than the concrete store so the view works over any durable
-// reader, and so a test can hand it nothing else.
+// Reader is the slice of the store the position and reconstruction views need
+// (contracts/store.md §2). It is a port rather than the concrete store so a view works
+// over any durable reader, and so a test can hand it nothing else.
 type Reader interface {
 	LoadRun(ctx context.Context, id uuid.UUID) (domain.Run, error)
 	Phases(ctx context.Context, runID uuid.UUID) ([]domain.PhaseState, error)
 	Events(ctx context.Context, runID uuid.UUID, fromSeq int64) ([]domain.Event, error)
+}
+
+// TimelineReader is the read surface the timeline needs: the event log it orders and
+// the decision records it interleaves (contracts/store.md §2).
+type TimelineReader interface {
+	Events(ctx context.Context, runID uuid.UUID, fromSeq int64) ([]domain.Event, error)
+	Decisions(ctx context.Context, runID uuid.UUID) ([]domain.Decision, error)
+}
+
+// TimelineEntry is one member of a run's ordered history: an event, or a decision
+// record placed where the transaction that wrote it put it. Exactly one of the two
+// pointers is set, so a reader can tell the two facts apart instead of guessing from
+// empty fields.
+type TimelineEntry struct {
+	Event    *domain.Event    `json:"event,omitempty"`
+	Decision *domain.Decision `json:"decision,omitempty"`
+}
+
+// Kind names the record the entry carries.
+func (e TimelineEntry) Kind() string {
+	switch {
+	case e.Decision != nil:
+		return "decision"
+	case e.Event != nil:
+		return "event"
+	default:
+		return ""
+	}
+}
+
+// Timeline is a run's history in order, as a reader who was not present sees it.
+type Timeline struct {
+	RunID   uuid.UUID       `json:"run_id"`
+	Entries []TimelineEntry `json:"entries"`
+}
+
+// TimelineOf reads a run's record and derives its timeline from it.
+func TimelineOf(ctx context.Context, reader TimelineReader, runID uuid.UUID) (Timeline, error) {
+	events, err := reader.Events(ctx, runID, 0)
+	if err != nil {
+		return Timeline{}, fmt.Errorf("timeline of run %s: %w", runID, err)
+	}
+	decisions, err := reader.Decisions(ctx, runID)
+	if err != nil {
+		return Timeline{}, fmt.Errorf("timeline of run %s: %w", runID, err)
+	}
+	return BuildTimeline(runID, events, decisions), nil
+}
+
+// BuildTimeline interleaves a run's events and decision records into one ordered
+// history.
+//
+// Events appear in `seq` order, always: `seq` is the only ordering authority the
+// record has, and a view that reordered them would be inventing a history
+// (data-model.md §6). A decision record carries no sequence number of its own
+// (data-model.md §7), so the timeline can place it only where the record fixes it:
+// after the events its transaction wrote. One transaction writes its events and its
+// decisions with a single timestamp, events first (contracts/store.md §1), so a
+// decision follows the events sharing its timestamp and precedes the next
+// transaction's. A decision committed in a transaction that wrote no event — a
+// `continue` degradation is one — lands between its neighbours, where it belongs.
+func BuildTimeline(runID uuid.UUID, events []domain.Event, decisions []domain.Decision) Timeline {
+	entries := make([]TimelineEntry, 0, len(events)+len(decisions))
+	next := 0
+	for i := range decisions {
+		decision := decisions[i]
+		for next < len(events) && !events[next].TS.After(decision.TS) {
+			event := events[next]
+			entries = append(entries, TimelineEntry{Event: &event})
+			next++
+		}
+		entries = append(entries, TimelineEntry{Decision: &decision})
+	}
+	for ; next < len(events); next++ {
+		event := events[next]
+		entries = append(entries, TimelineEntry{Event: &event})
+	}
+	return Timeline{RunID: runID, Entries: entries}
+}
+
+// LatestEvents is how many of the newest events the run status view carries: what
+// `zamnius run status` prints and returns in its `--json` form (contracts/cli.md §1).
+const LatestEvents = 5
+
+// StatusView is the position report a reader sees: the run row's fields, its phase
+// rows, the newest events, and the next expected action. The row's fields are carried
+// rather than the row itself, so a view never re-serializes the stored definition
+// snapshot; nothing here is stored twice, and none of it takes the lease, so a run
+// another process owns is still inspectable (FR-023).
+type StatusView struct {
+	RunID        uuid.UUID           `json:"run_id"`
+	Status       domain.RunStatus    `json:"status"`
+	CurrentPhase *string             `json:"current_phase,omitempty"`
+	Phases       []domain.PhaseState `json:"phases"`
+	Budget       domain.Budget       `json:"budget"`
+	Spent        domain.Consumption  `json:"spent"`
+	// OwnerID and LeaseExpiresAt are what explain a refused resume: they name the
+	// process holding the run and when its claim lapses (contracts/cli.md §1).
+	OwnerID        *string        `json:"owner_id,omitempty"`
+	LeaseExpiresAt *time.Time     `json:"lease_expires_at,omitempty"`
+	NextAction     string         `json:"next_action"`
+	LastEvents     []domain.Event `json:"last_events,omitempty"`
+}
+
+// Status derives the run status view from the store.
+func Status(ctx context.Context, reader Reader, runID uuid.UUID) (StatusView, error) {
+	run, err := reader.LoadRun(ctx, runID)
+	if err != nil {
+		return StatusView{}, fmt.Errorf("status of run %s: %w", runID, err)
+	}
+	phases, err := reader.Phases(ctx, runID)
+	if err != nil {
+		return StatusView{}, fmt.Errorf("status of run %s: %w", runID, err)
+	}
+	events, err := reader.Events(ctx, runID, 0)
+	if err != nil {
+		return StatusView{}, fmt.Errorf("status of run %s: %w", runID, err)
+	}
+	if len(events) > LatestEvents {
+		events = events[len(events)-LatestEvents:]
+	}
+
+	return StatusView{
+		RunID:          run.ID,
+		Status:         run.Status,
+		CurrentPhase:   run.CurrentPhase,
+		Phases:         phases,
+		Budget:         run.Budget,
+		Spent:          run.Spent,
+		OwnerID:        run.OwnerID,
+		LeaseExpiresAt: run.LeaseExpiresAt,
+		NextAction:     NextAction(run, phases),
+		LastEvents:     events,
+	}, nil
+}
+
+// Verify derives the verification view from an already-loaded record: every event's
+// hash and link, and every artifact row checked against the file it names. It takes the
+// loaded facts rather than a reader because the artifact row index is an optional read
+// the state contract does not put on the store port (contracts/store.md §4), so the
+// caller owns its own read paths and the view stays a pure projection of them.
+//
+// A report is returned even when a check fails, because the problems and the counts
+// are together the answer: a chain failure, a missing file, and a digest mismatch are
+// distinguished for the operator (contracts/cli.md §3).
+func Verify(ctx context.Context, runID uuid.UUID, events []domain.Event, refs []domain.ArtifactRef, verifier ArtifactVerifier, now time.Time) Report {
+	problems := VerifyChain(events)
+	problems = append(problems, VerifyArtifacts(ctx, refs, verifier)...)
+
+	return Report{
+		RunID:      runID,
+		Events:     len(events),
+		Artifacts:  len(refs),
+		VerifiedAt: now,
+		Problems:   problems,
+	}
 }
 
 // Work is one declared unit of work and the status the record gives it: a phase
@@ -118,7 +276,7 @@ func Reconstruct(ctx context.Context, reader Reader, runID uuid.UUID) (Reconstru
 		Status:       run.Status,
 		CurrentPhase: run.CurrentPhase,
 		Reason:       run.OutcomeReason,
-		NextAction:   nextAction(run, phases),
+		NextAction:   NextAction(run, phases),
 	}
 
 	// Declared order is the report order: a reader reconstructs the plan, not the
@@ -214,11 +372,12 @@ func payloadBranch(event domain.Event) string {
 	return payload.Branch
 }
 
-// nextAction states the next expected action. The wording is the one Engine.Status
-// publishes: two readers of one record telling an operator different next steps would
-// make both untrustworthy, and TestVerifyReconstructionFromTheStoreAlone pins the two
-// together.
-func nextAction(run domain.Run, phases []domain.PhaseState) string {
+// NextAction states the next expected action for a run in the state the record gives
+// it. It is exported because the view and the engine publish one vocabulary: two
+// readers of one record telling an operator different next steps would make both
+// untrustworthy, and TestVerifyReconstructionFromTheStoreAlone and
+// TestVerifyStatusViewMatchesTheStoreAndTheEngine pin the readers together.
+func NextAction(run domain.Run, phases []domain.PhaseState) string {
 	switch run.Status {
 	case domain.RunSucceeded:
 		return "nothing; the run is complete"
