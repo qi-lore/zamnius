@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/prompt-fu/zamnius/internal/domain"
@@ -352,6 +353,41 @@ func TestReadsAreScopedToTheirRun(t *testing.T) {
 	}
 	if len(decisions) != 0 {
 		t.Fatalf("decisions leaked between runs: %+v", decisions)
+	}
+}
+
+// TestLoadRunToleratesALegacyTimestamp proves the read path accepts a timestamp
+// written in RFC3339Nano — an older build's format, or a hand-edited row — even
+// though the canonical layout is fixed-width, and refuses a genuinely unparseable
+// value rather than returning a zero time.
+func TestLoadRunToleratesALegacyTimestamp(t *testing.T) {
+	t.Parallel()
+
+	store := newStore(t)
+	ctx := context.Background()
+	run := createRun(t, store, "plan")
+
+	// RFC3339Nano without fractional seconds: valid, but not the canonical layout.
+	if _, err := store.DB().ExecContext(ctx,
+		`UPDATE runs SET created_at = ? WHERE id = ?`, "2026-11-12T09:00:00Z", run.ID.String()); err != nil {
+		t.Fatalf("seed legacy timestamp: %v", err)
+	}
+	loaded, err := store.LoadRun(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("LoadRun() error = %v, want the legacy timestamp tolerated", err)
+	}
+	want := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
+	if !loaded.CreatedAt.Equal(want) {
+		t.Errorf("CreatedAt = %v, want %v", loaded.CreatedAt, want)
+	}
+
+	// Neither layout parses this, so the read must fail with the value named.
+	if _, err := store.DB().ExecContext(ctx,
+		`UPDATE runs SET created_at = ? WHERE id = ?`, "not-a-timestamp", run.ID.String()); err != nil {
+		t.Fatalf("seed unparseable timestamp: %v", err)
+	}
+	if _, err := store.LoadRun(ctx, run.ID); err == nil {
+		t.Fatal("LoadRun() accepted an unparseable timestamp; it must refuse")
 	}
 }
 

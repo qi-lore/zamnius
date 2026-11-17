@@ -3,6 +3,7 @@ package sqlite_test
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -75,6 +76,36 @@ func TestEventsRejectUpdateAndDelete(t *testing.T) {
 	}
 	if events[0].Actor != domain.ActorSystem {
 		t.Errorf("event actor = %q, want %q", events[0].Actor, domain.ActorSystem)
+	}
+}
+
+// TestOpenRequiresAPathAndReportsIt pins two small parts of the constructor's
+// contract: an empty path is refused rather than silently opening something, and
+// Path reports exactly the file that was opened. It also proves Open creates the
+// containing directory, so a fresh state directory needs no prior mkdir.
+func TestOpenRequiresAPathAndReportsIt(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	if _, err := sqlite.Open(ctx, ""); err == nil {
+		t.Fatal(`Open("") succeeded; an empty path must be refused`)
+	} else if !strings.Contains(err.Error(), "path") {
+		t.Errorf(`Open("") error = %v, want it to name the missing path`, err)
+	}
+
+	// A nested directory that does not exist yet: Open must create it.
+	path := filepath.Join(t.TempDir(), "nested", "state.db")
+	store, err := sqlite.Open(ctx, path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("close store: %v", err)
+		}
+	})
+	if got := store.Path(); got != path {
+		t.Errorf("Path() = %q, want %q", got, path)
 	}
 }
 
