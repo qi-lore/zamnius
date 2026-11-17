@@ -33,8 +33,8 @@ alone (constitution Principle II).
 - Plan, research, data model, contracts, quickstart, and **`tasks.md`** are committed.
 - `tasks.md` holds **68 TDD tasks in six phases**: Setup T001–T005, Foundational T006–T019
   (blocks every story), US1 T020–T042, US2 T043–T053, US3 T054–T062, Polish T063–T068.
-- **Implementation is well under way: T001–T061 are done and tested, so US1 and US2 are complete and
-  US3 is more than half done** — the recoverability proofs (four commit-boundary interruption points, a genuine
+- **Implementation is well under way: T001–T062 are done and tested, so US1, US2, and US3 are
+  complete** — the recoverability proofs (four commit-boundary interruption points, a genuine
   `SIGKILL`, ownership/lease takeover, attempt reconciliation, lease heartbeat, definition-drift
   refusal, schema-version migration/refusal, the `run resume` command, signal handling, and the
   paused position) are all in place and committed, and US3's audit suite
@@ -55,9 +55,11 @@ alone (constitution Principle II).
   row can leave, refusing while any run is running. T061 closed the integrity-facing CLI: `run
   artifacts --out <dir>` (`internal/cli/artifacts.go`) verifies each fingerprint before writing and
   aborts with exit `6` on a mismatch, and `run status` (`internal/cli/status.go`) prints the last five
-  events in both forms. **The next action is to continue US3 at T062** (the end-to-end golden
-  assertions in `test/integration/cli_test.go`: the enriched status view, export verification, and exit
-  `6` on a corrupted artifact file). For the exact per-task state — done,
+  events in both forms. T062 locked the audit surface end to end: `test/integration/cli_test.go` now
+  asserts the enriched status view, export verification of every fingerprint, and exit `6` on a
+  corrupted artifact file through the same contract harness as the rest of the CLI. **US3 is complete;
+  the next action is Polish, T063** (`test/secrets/secrets_test.go`, the secret-leak suite). For the
+  exact per-task state — done,
   implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
   boxes above it are updated.
@@ -141,7 +143,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.implement # implement the NEXT single unchecked task (now T062), verify it, then STOP and report for review
+/speckit.implement # implement the NEXT single unchecked task (now T063), verify it, then STOP and report for review
 /speckit.analyze   # cross-artifact consistency check
 ```
 
