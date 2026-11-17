@@ -27,21 +27,24 @@ decisions     docs/domain_knowledge/adr/0001–0009           architectural rati
 Chat history is never the source of truth. A fresh agent must be able to resume from these files
 alone (constitution Principle II).
 
-## Current state (2026-11-15)
+## Current state (2026-11-17)
 
 - Spec is grilled and committed; 12 decisions recorded in `spec.md` → `## Clarifications`.
 - Plan, research, data model, contracts, quickstart, and **`tasks.md`** are committed.
 - `tasks.md` holds **68 TDD tasks in six phases**: Setup T001–T005, Foundational T006–T019
   (blocks every story), US1 T020–T042, US2 T043–T053, US3 T054–T062, Polish T063–T068.
-- **Implementation is well under way: T001–T054 are done and tested, so US1 and US2 are complete and
+- **Implementation is well under way: T001–T055 are done and tested, so US1 and US2 are complete and
   US3 has begun** — the recoverability proofs (four commit-boundary interruption points, a genuine
   `SIGKILL`, ownership/lease takeover, attempt reconciliation, lease heartbeat, definition-drift
   refusal, schema-version migration/refusal, the `run resume` command, signal handling, and the
-  paused position) are all in place and committed, and US3's chain-integrity suite
-  (`test/audit/chain_test.go` + the shared `test/audit/harness_test.go`, selected by
-  `go test ./test/audit -run TestVerify`) is green. **The next action is to continue US3 at T055**
-  (the artifact-integrity tests in `test/audit/artifact_test.go`). For the exact per-task state —
-  done, implemented-but-untested, or untouched — and the design decisions taken along the way, read
+  paused position) are all in place and committed, and US3's verification suite
+  (`test/audit/chain_test.go` and `test/audit/artifact_test.go` over the shared
+  `test/audit/harness_test.go`, selected by `go test ./test/audit -run TestVerify`) is green.
+  T055 also closed a contract gap: resume now verifies every artifact row against its file before
+  reconciliation, so a corrupted or missing artifact fails the run with evidence instead of being
+  silently reused (store.md §5 step 3). **The next action is to continue US3 at T056** (the audit
+  completeness check in `test/audit/completeness_test.go`). For the exact per-task state — done,
+  implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
   boxes above it are updated.
 - Branch: `001-multi-agent-framework`, commits above the initial commit `0a512c3`. Per the
@@ -124,7 +127,7 @@ CGO_ENABLED=0 go build ./...
 ## Useful commands
 
 ```bash
-/speckit.implement # implement the NEXT single unchecked task (now T055), verify it, then STOP and report for review
+/speckit.implement # implement the NEXT single unchecked task (now T056), verify it, then STOP and report for review
 /speckit.analyze   # cross-artifact consistency check
 ```
 
