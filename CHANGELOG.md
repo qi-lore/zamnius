@@ -13,11 +13,12 @@ release without a compatibility note.
 
 ---
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-11-18
 
 The first increment: ordered phases with fan-out/join, recoverability, and audit reconstruction.
-The build reports `zamnius 0.1.0` (`api_version "1"`, `schema 1`); no git tag is published yet, so
-`go install …@latest` does not resolve. This entry records the initial public contract set.
+The build reports `zamnius 0.1.0` (`api_version "1"`, `schema 1`) and the release is tagged `v0.1.0`,
+so `go install …@latest` resolves from this release on. This entry records the initial public
+contract set.
 
 ### Compatibility note
 
