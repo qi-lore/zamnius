@@ -19,6 +19,13 @@ The first increment: ordered phases with fan-out/join, recoverability, and audit
 The build reports `zamnius 0.1.0` (`api_version "1"`, `schema 1`); no git tag is published yet, so
 `go install …@latest` does not resolve. This entry records the initial public contract set.
 
+### Compatibility note
+
+The import path is `github.com/qi-lore/zamnius`. It was renamed from `github.com/prompt-fu/zamnius`
+before any tag was cut: the exported surface is unchanged by the rename, no released path existed to
+break, and a pre-release importer updates its imports. Once a version is tagged, moving the path
+falls under the **major** rule in the policy below.
+
 ### Added
 
 #### Entry point and operations
