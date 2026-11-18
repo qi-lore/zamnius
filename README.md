@@ -33,8 +33,9 @@ go build -o bin/zamnius ./cmd/zamnius       # the CLI
 # zamnius 0.1.0 (api_version "1", schema 1)
 ```
 
-No release is published yet, so `go install …@latest` does not apply — build from the checkout. The
-repository is self-contained: `go test ./... -count=1` needs no network and no provider key.
+`go install github.com/qi-lore/zamnius/cmd/zamnius@v0.1.0` installs the CLI without a checkout; the
+build below compiles the same source. The repository is self-contained: `go test ./... -count=1`
+needs no network and no provider key.
 
 A [`Makefile`](Makefile) wraps the same commands: `make help` lists the targets, `make bin` builds the
 CLI into `bin/zamnius`, `make verify` runs the CI gate in order (build, vet, tests, race, the
