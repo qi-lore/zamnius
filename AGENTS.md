@@ -27,7 +27,7 @@ decisions     docs/domain_knowledge/adr/0001–0009           architectural rati
 Chat history is never the source of truth. A fresh agent must be able to resume from these files
 alone (constitution Principle II).
 
-## Current state (2026-11-17)
+## Current state (2026-11-18)
 
 - Spec is grilled and committed; 12 decisions recorded in `spec.md` → `## Clarifications`.
 - Plan, research, data model, contracts, quickstart, and **`tasks.md`** are committed.
@@ -107,7 +107,11 @@ alone (constitution Principle II).
   `git merge-tree --write-tree dev 001-multi-agent-framework`, which returns a clean tree. The
   branches have therefore diverged (the feature branch is no longer a descendant of `dev`), so
   integration is a real 3-way merge. Add an ignore rule in one place and mirror the exact content;
-  a divergent edit on a single branch is what re-introduces the conflict.
+  a divergent edit on a single branch is what re-introduces the conflict — and that is what
+  happened: the feature branch added `.specify/assessments/` in `f6f101f` without mirroring it to
+  `dev`, which re-broke the `feature → dev` merge. On **2026-11-18** `dev` was re-synced with that
+  rule (`479475c`), so the ignore files are byte-identical again and
+  `git merge-tree --write-tree dev 001-multi-agent-framework` is clean once more.
 - Source now exists: `cmd/zamnius`, `internal/{app,audit,cli,config,definition,domain,engine,fault,model,observability,store}`,
   `pkg/zamnius`, and tests under `test/{audit,fakes,integration,recoverability,secrets,testdata}`. No
   commit may claim behaviour that has no test.
