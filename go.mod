@@ -1,4 +1,4 @@
-module github.com/prompt-fu/zamnius
+module github.com/qi-lore/zamnius
 
 go 1.26.0
 

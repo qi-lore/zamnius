@@ -3,8 +3,8 @@ package engine
 import (
 	"fmt"
 
-	"github.com/prompt-fu/zamnius/internal/definition"
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/definition"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // Budget units, used verbatim in events and decisions so a report can name the

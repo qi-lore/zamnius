@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // FuncClient answers by inspecting the request instead of replaying a queue. A

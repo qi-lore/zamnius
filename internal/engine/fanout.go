@@ -5,8 +5,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/prompt-fu/zamnius/internal/definition"
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/definition"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // runFanout executes every branch of a fan-out phase concurrently, bounded by the

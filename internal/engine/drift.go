@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/prompt-fu/zamnius/internal/definition"
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/definition"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // definitionDrift is how a resume's definition disagrees with the run's recorded

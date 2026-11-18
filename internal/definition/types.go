@@ -7,7 +7,7 @@
 // once a run references it; the run stores a canonical snapshot and a fingerprint.
 package definition
 
-import "github.com/prompt-fu/zamnius/internal/domain"
+import "github.com/qi-lore/zamnius/internal/domain"
 
 // SchemaVersion is the only definition schema version this build understands.
 const SchemaVersion = "1"

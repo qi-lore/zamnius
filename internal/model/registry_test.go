@@ -7,8 +7,8 @@ import (
 	"net"
 	"testing"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/model"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/model"
 )
 
 // stubClient is a named client so tests can prove which registration won.

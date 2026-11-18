@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // Client is the engine-facing model port. Go structural typing means any

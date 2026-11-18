@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/pkg/zamnius"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/pkg/zamnius"
 )
 
 // artifactContent is the read path the export needs: fetch content by digest, and

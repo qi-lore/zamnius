@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/model/openai"
-	"github.com/prompt-fu/zamnius/internal/observability"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/model/openai"
+	"github.com/qi-lore/zamnius/internal/observability"
 )
 
 // canaryKey stands in for a real credential. Every test that captures logs or

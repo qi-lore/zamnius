@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/engine"
-	"github.com/prompt-fu/zamnius/internal/fault"
-	"github.com/prompt-fu/zamnius/test/fakes"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/engine"
+	"github.com/qi-lore/zamnius/internal/fault"
+	"github.com/qi-lore/zamnius/test/fakes"
 )
 
 // This file covers attempt reconciliation (T047, FR-063, US2 scenario 7): an

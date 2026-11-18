@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/prompt-fu/zamnius/internal/definition"
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/definition"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // evaluateJoin applies the declared rule to the branch outcomes **in declared

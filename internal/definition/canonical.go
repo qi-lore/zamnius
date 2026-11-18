@@ -3,7 +3,7 @@ package definition
 import (
 	"fmt"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // Snapshot returns the canonical JSON of a normalized definition. It is stored on

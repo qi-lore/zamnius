@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prompt-fu/zamnius/internal/observability"
+	"github.com/qi-lore/zamnius/internal/observability"
 )
 
 func TestRedactSkipsEmptySecrets(t *testing.T) {

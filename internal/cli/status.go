@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/prompt-fu/zamnius/pkg/zamnius"
+	"github.com/qi-lore/zamnius/pkg/zamnius"
 )
 
 // runStatus executes `zamnius run status`: the position report for one run. The

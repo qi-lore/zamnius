@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 var (

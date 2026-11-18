@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prompt-fu/zamnius/internal/audit"
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/engine"
+	"github.com/qi-lore/zamnius/internal/audit"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/engine"
 )
 
 // TestVerifyChainAcceptsACleanRun is the baseline: a log this build wrote chains

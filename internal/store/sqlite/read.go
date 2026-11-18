@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // LoadRun reads one run row.

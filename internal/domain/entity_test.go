@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 func TestConsumptionAddAndTokens(t *testing.T) {

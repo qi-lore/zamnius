@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/domain"
 
 	// Pure-Go driver: no cgo, so the reference build cross-compiles and the
 	// offline test suite works without a C toolchain (research.md R2).

@@ -3,7 +3,7 @@ package domain_test
 import (
 	"testing"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 func TestRunStatusValidAndTerminal(t *testing.T) {

@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/model"
-	"github.com/prompt-fu/zamnius/internal/observability"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/model"
+	"github.com/qi-lore/zamnius/internal/observability"
 )
 
 const (

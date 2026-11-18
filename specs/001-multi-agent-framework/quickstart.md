@@ -20,7 +20,7 @@ The workflow definitions these scenarios run are annotated one behaviour at a ti
 **Setup**
 
 ```bash
-git clone github.com/prompt-fu/zamnius && cd zamnius
+git clone github.com/qi-lore/zamnius && cd zamnius
 CGO_ENABLED=0 go build ./...
 go test ./... -race
 ```
@@ -230,7 +230,7 @@ go test ./... -coverpkg=./... -coverprofile=coverage.out
 go tool cover -func=coverage.out | tail -1
 
 # Per-target figure (Go's own merge):
-go test ./... -coverpkg=github.com/prompt-fu/zamnius/internal/engine -coverprofile=engine.out
+go test ./... -coverpkg=github.com/qi-lore/zamnius/internal/engine -coverprofile=engine.out
 go tool cover -func=engine.out | tail -1
 ```
 

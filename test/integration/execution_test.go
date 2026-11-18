@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prompt-fu/zamnius/internal/definition"
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/engine"
+	"github.com/qi-lore/zamnius/internal/definition"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/engine"
 )
 
 // TestFanoutBranchesOverlap is SC-006: three branches must genuinely overlap, and

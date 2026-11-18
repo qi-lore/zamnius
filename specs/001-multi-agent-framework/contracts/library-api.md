@@ -1,6 +1,6 @@
 # Contract: embedded library surface
 
-Package: `github.com/prompt-fu/zamnius/pkg/zamnius`.
+Package: `github.com/qi-lore/zamnius/pkg/zamnius`.
 Related: constitution §VII (stable public contracts), [model-client.md](model-client.md), [store.md](store.md).
 
 Anything importable by adopters lives here and is versioned under semantic versioning. Implementations

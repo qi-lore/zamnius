@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // pause stops the run in a resumable state. The commit runs on a context that is

@@ -6,7 +6,7 @@ constitution are the authoritative sources.
 ## What this is
 
 Zamnius is a recoverable multi-agent workflow framework in Go. Module path
-`github.com/prompt-fu/zamnius`. The committed increment covers **only** ordered phases with
+`github.com/qi-lore/zamnius`. The committed increment covers **only** ordered phases with
 fan-out/join, resumability, and audit reconstruction (stories P1–P3). Roles, task board, messaging,
 memory, tools/MCP, HTTP, gRPC, A2A, and AG-UI are deliberately deferred to later feature specs.
 

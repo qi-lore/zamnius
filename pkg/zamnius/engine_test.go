@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prompt-fu/zamnius/internal/definition"
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/store/artifactfs"
-	"github.com/prompt-fu/zamnius/internal/store/sqlite"
-	"github.com/prompt-fu/zamnius/pkg/zamnius"
-	"github.com/prompt-fu/zamnius/test/fakes"
+	"github.com/qi-lore/zamnius/internal/definition"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/store/artifactfs"
+	"github.com/qi-lore/zamnius/internal/store/sqlite"
+	"github.com/qi-lore/zamnius/pkg/zamnius"
+	"github.com/qi-lore/zamnius/test/fakes"
 )
 
 // registry is what an adopter writes: it names the public client type, not the

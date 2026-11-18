@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/prompt-fu/zamnius/internal/audit"
-	"github.com/prompt-fu/zamnius/internal/definition"
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/engine"
+	"github.com/qi-lore/zamnius/internal/audit"
+	"github.com/qi-lore/zamnius/internal/definition"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/engine"
 )
 
 // Workflow and result vocabulary. Aliases, not copies: a value the engine

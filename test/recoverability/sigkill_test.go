@@ -18,10 +18,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/engine"
-	"github.com/prompt-fu/zamnius/internal/store/sqlite"
-	"github.com/prompt-fu/zamnius/test/fakes"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/engine"
+	"github.com/qi-lore/zamnius/internal/store/sqlite"
+	"github.com/qi-lore/zamnius/test/fakes"
 )
 
 // The genuine-process-death harness (US2 scenario 1, SC-001, SC-002). A fault point

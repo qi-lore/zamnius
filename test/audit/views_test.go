@@ -25,8 +25,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/prompt-fu/zamnius/internal/audit"
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/audit"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // viewScenario is one sampled run, named so a failure says which record shape broke.

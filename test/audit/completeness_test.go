@@ -26,10 +26,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/prompt-fu/zamnius/internal/definition"
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/engine"
-	"github.com/prompt-fu/zamnius/test/fakes"
+	"github.com/qi-lore/zamnius/internal/definition"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/engine"
+	"github.com/qi-lore/zamnius/test/fakes"
 )
 
 // TestVerifyEveryEventIsAttributed proves US3 scenario 1: every phase transition

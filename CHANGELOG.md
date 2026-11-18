@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The **public contract** is the importable surface of
-`github.com/prompt-fu/zamnius/pkg/zamnius`
+`github.com/qi-lore/zamnius/pkg/zamnius`
 ([contracts/library-api.md](specs/001-multi-agent-framework/contracts/library-api.md)). Packages
 under `internal/` are implementation and are **not** part of the contract; they may change in any
 release without a compatibility note.

@@ -13,14 +13,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/prompt-fu/zamnius/internal/config"
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/model"
-	"github.com/prompt-fu/zamnius/internal/model/openai"
-	"github.com/prompt-fu/zamnius/internal/observability"
-	"github.com/prompt-fu/zamnius/internal/store/artifactfs"
-	"github.com/prompt-fu/zamnius/internal/store/sqlite"
-	"github.com/prompt-fu/zamnius/pkg/zamnius"
+	"github.com/qi-lore/zamnius/internal/config"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/model"
+	"github.com/qi-lore/zamnius/internal/model/openai"
+	"github.com/qi-lore/zamnius/internal/observability"
+	"github.com/qi-lore/zamnius/internal/store/artifactfs"
+	"github.com/qi-lore/zamnius/internal/store/sqlite"
+	"github.com/qi-lore/zamnius/pkg/zamnius"
 )
 
 // Provider is the single provider name a definition may carry (data-model.md §1).

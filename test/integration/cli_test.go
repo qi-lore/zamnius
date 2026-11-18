@@ -13,10 +13,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/prompt-fu/zamnius/internal/app"
-	"github.com/prompt-fu/zamnius/internal/cli"
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/observability"
+	"github.com/qi-lore/zamnius/internal/app"
+	"github.com/qi-lore/zamnius/internal/cli"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/observability"
 )
 
 // cliEnv is one isolated command environment: a state directory and a fake

@@ -16,8 +16,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/pkg/zamnius"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/pkg/zamnius"
 )
 
 // fakeArtifactContent is the export's read path without a content-addressed store.

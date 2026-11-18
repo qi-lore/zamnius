@@ -26,7 +26,7 @@ surfaces are deferred ([scope](#scope-of-this-increment)).
 ## Build
 
 ```bash
-git clone https://github.com/prompt-fu/zamnius && cd zamnius
+git clone https://github.com/qi-lore/zamnius && cd zamnius
 go build ./...                              # compiles everything
 go build -o bin/zamnius ./cmd/zamnius       # the CLI
 ./bin/zamnius version
@@ -414,13 +414,13 @@ ownership changes are recorded as decisions.
 
 ## Embed it as a library
 
-The engine is importable at `github.com/prompt-fu/zamnius/pkg/zamnius`. Every dependency is injected
+The engine is importable at `github.com/qi-lore/zamnius/pkg/zamnius`. Every dependency is injected
 at construction — no package-level defaults, no `init()` configuration — so a test can freeze the
 clock, script the model, and assert the resulting event sequence. This is the shape of the entry
 point; the required dependencies are the three ports:
 
 ```go
-import "github.com/prompt-fu/zamnius/pkg/zamnius"
+import "github.com/qi-lore/zamnius/pkg/zamnius"
 
 engine, err := zamnius.New(zamnius.Options{
     Store:     store,          // StateStore      — durable run state   (required)

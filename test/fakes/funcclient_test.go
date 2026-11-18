@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/test/fakes"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/test/fakes"
 )
 
 func TestFuncClientAnswersFromTheRequestAndRecordsCalls(t *testing.T) {

@@ -7,7 +7,7 @@ package main
 import (
 	"os"
 
-	"github.com/prompt-fu/zamnius/internal/cli"
+	"github.com/qi-lore/zamnius/internal/cli"
 )
 
 func main() {

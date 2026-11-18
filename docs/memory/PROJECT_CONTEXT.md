@@ -4,7 +4,7 @@ Last reviewed: 2026-11-12
 
 ## Product / Service
 
-**Zamnius** — a recoverable multi-agent workflow framework in Go (`github.com/prompt-fu/zamnius`).
+**Zamnius** — a recoverable multi-agent workflow framework in Go (`github.com/qi-lore/zamnius`).
 An engineer declares a workflow as ordered phases, optionally fanning out to concurrent branches with a
 declared join rule; the framework drives each phase, applies retries, timeouts, and budgets, commits the
 artifacts each phase produced, and can resume any interrupted run from a fresh process holding only the

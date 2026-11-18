@@ -40,11 +40,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/prompt-fu/zamnius/internal/app"
-	"github.com/prompt-fu/zamnius/internal/cli"
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/observability"
-	"github.com/prompt-fu/zamnius/internal/store/sqlite"
+	"github.com/qi-lore/zamnius/internal/app"
+	"github.com/qi-lore/zamnius/internal/cli"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/observability"
+	"github.com/qi-lore/zamnius/internal/store/sqlite"
 )
 
 // canaryKey is the credential every command in the corpus runs with. It is a

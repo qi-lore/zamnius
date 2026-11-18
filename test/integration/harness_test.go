@@ -8,12 +8,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/prompt-fu/zamnius/internal/definition"
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/engine"
-	"github.com/prompt-fu/zamnius/internal/store/artifactfs"
-	"github.com/prompt-fu/zamnius/internal/store/sqlite"
-	"github.com/prompt-fu/zamnius/test/fakes"
+	"github.com/qi-lore/zamnius/internal/definition"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/engine"
+	"github.com/qi-lore/zamnius/internal/store/artifactfs"
+	"github.com/qi-lore/zamnius/internal/store/sqlite"
+	"github.com/qi-lore/zamnius/test/fakes"
 )
 
 // harness bundles everything a run needs, assembled exactly the way the

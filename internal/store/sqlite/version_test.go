@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/store/sqlite"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/store/sqlite"
 )
 
 // TestCheckRunVersionReportsTheSchemaGapAndRefusesNewerState proves the store tells

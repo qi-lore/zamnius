@@ -2,7 +2,7 @@
 
 **Feature**: `specs/001-multi-agent-framework/spec.md`
 **Date**: 2026-11-11
-**Module path**: `github.com/prompt-fu/zamnius`
+**Module path**: `github.com/qi-lore/zamnius`
 **Scope**: stories P1–P3 only — ordered phases with fan-out/join, resumability, audit reconstruction.
 
 All decisions below were verified against live module metadata on 2026-11-11.

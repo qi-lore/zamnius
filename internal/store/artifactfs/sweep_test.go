@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/internal/store/artifactfs"
-	"github.com/prompt-fu/zamnius/internal/store/sqlite"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/store/artifactfs"
+	"github.com/qi-lore/zamnius/internal/store/sqlite"
 )
 
 func TestSweepRefusesWhileARunIsRunning(t *testing.T) {

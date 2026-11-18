@@ -6,8 +6,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/prompt-fu/zamnius/internal/domain"
-	"github.com/prompt-fu/zamnius/pkg/zamnius"
+	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/pkg/zamnius"
 )
 
 // envelope is the single object every command emits under --json. It is versioned

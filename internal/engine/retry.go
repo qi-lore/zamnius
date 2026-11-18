@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/prompt-fu/zamnius/internal/definition"
-	"github.com/prompt-fu/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/definition"
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // retryDecision decides whether another attempt is allowed, and explains why in
