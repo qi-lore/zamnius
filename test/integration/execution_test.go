@@ -17,7 +17,16 @@ import (
 func TestFanoutBranchesOverlap(t *testing.T) {
 	t.Parallel()
 
-	const delay = 150 * time.Millisecond
+	// The branch delay sets the signal-to-noise ratio of the comparison below. Every
+	// run pays a fixed cost that does not shrink with the delay — definition
+	// snapshot, lease, attempt and artifact commits, and the join for a fan-out — so
+	// the delay has to dominate that cost for the ratio to measure overlap rather
+	// than per-run overhead. At 150ms the two runs differ by ~116ms of fixed cost on
+	// a shared CI runner under -race, which is 77% of the single-branch baseline;
+	// that is what tripped the 1.5x bound at 1.51x. At 1s the same noise is ~11% of
+	// the measurement, while a serialized fan-out still lands near 3x, so the bound
+	// keeps its teeth in both directions.
+	const delay = time.Second
 
 	// One branch, measured in the same test so the comparison cannot drift with
 	// machine speed.
@@ -55,8 +64,14 @@ func TestFanoutBranchesOverlap(t *testing.T) {
 	if result.Status != domain.RunSucceeded {
 		t.Fatalf("status = %q, want succeeded", result.Status)
 	}
-	// Three concurrent branches must cost about one branch, not three: 1.5× is the
-	// budget the specification sets.
+	// The baseline must be a real wall-clock measurement of at least the branch
+	// delay, or the comparison below is vacuous.
+	if singleElapsed < delay {
+		t.Fatalf("single-branch baseline %v is below the branch delay %v; the run is not measuring wall clock",
+			singleElapsed, delay)
+	}
+	// Three concurrent branches must cost about one branch, not three: 1.5x is the
+	// budget SC-006 sets.
 	if parallelElapsed > singleElapsed*3/2 {
 		t.Errorf("fan-out took %v versus %v for one branch; branches did not overlap",
 			parallelElapsed, singleElapsed)
