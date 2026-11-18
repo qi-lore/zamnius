@@ -1,0 +1,21 @@
+# Branch and spec-folder naming convention (branch-convention extension, v1.0.0).
+# Preset: gitflow — type-prefixed branches, flat numbered spec folders.
+# Adopted 2026-11-11. `001-multi-agent-framework` predates this config and is kept as-is
+# by explicit decision; it is the only grandfathered branch.
+convention:
+  branch_pattern: "{type}/{seq}-{kebab}"
+  folder_pattern: "{seq}-{kebab}"
+  type_prefix:
+    feature: "feat"
+    bugfix: "fix"
+    hotfix: "hotfix"
+    refactor: "refactor"
+    docs: "docs"
+  default_type: "feat"
+  seq_padding: 3
+  seq_start: 1
+  date_format: "YYYYMMDD"
+  ticket_pattern: "[A-Z]+-[0-9]+"
+  max_length: 60
+  separator: "-"
+  lowercase: true

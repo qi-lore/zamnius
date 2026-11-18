@@ -1,0 +1,41 @@
+# Continuous integration for Zamnius.
+# Order matters: a broken module or toolchain fails before any feature test runs.
+name: ci
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.4"
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Unit and integration tests
+        run: go test ./... -count=1
+
+      - name: Race detector
+        run: go test ./... -race -count=1
+
+      - name: Recoverability suite (no flakes tolerated)
+        run: go test ./test/recoverability -count=10
+
+      - name: Pure-Go build (no cgo)
+        run: CGO_ENABLED=0 go build ./...
