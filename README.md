@@ -36,6 +36,11 @@ go build -o bin/zamnius ./cmd/zamnius       # the CLI
 No release is published yet, so `go install …@latest` does not apply — build from the checkout. The
 repository is self-contained: `go test ./... -count=1` needs no network and no provider key.
 
+A [`Makefile`](Makefile) wraps the same commands: `make help` lists the targets, `make bin` builds the
+CLI into `bin/zamnius`, `make verify` runs the CI gate in order (build, vet, tests, race, the
+recoverability suite ten times, pure-Go build), and `make check` adds the `gofmt` check and the
+linter ahead of it.
+
 ## Point it at a model
 
 Two environment variables configure the provider:
