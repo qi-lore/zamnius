@@ -6,9 +6,10 @@ import (
 	"github.com/qi-lore/zamnius/internal/fault"
 )
 
+// These tests deliberately do not call t.Parallel: fault arming is
+// process-global, so running them concurrently would let one test's Disarm
+// clear the arming another test relies on.
 func TestHitIsNoOpWhenDisarmed(t *testing.T) {
-	t.Parallel()
-
 	fault.Disarm()
 	// Must not panic: an unarmed point is a map lookup in production.
 	fault.Hit(fault.BeforeCommit)
@@ -16,8 +17,6 @@ func TestHitIsNoOpWhenDisarmed(t *testing.T) {
 }
 
 func TestHitPanicsWhenArmed(t *testing.T) {
-	t.Parallel()
-
 	fault.Arm(fault.BeforeCommit)
 	t.Cleanup(fault.Disarm)
 
@@ -45,8 +44,6 @@ func TestHitPanicsWhenArmed(t *testing.T) {
 }
 
 func TestDisarmClearsEverything(t *testing.T) {
-	t.Parallel()
-
 	fault.Arm(fault.BeforeLeaseRenew, fault.AfterArtifactRename)
 	fault.Disarm()
 	if fault.Armed(fault.BeforeLeaseRenew) || fault.Armed(fault.AfterArtifactRename) {
