@@ -1,0 +1,27 @@
+version: "1"
+name: slow
+description: A two-branch fan-out used to interrupt a run mid-flight and prove it is resumable.
+phases:
+  - name: draft
+    mode: fanout
+    join:
+      rule: all
+    branches:
+      - name: outline
+        agent:
+          name: outline
+          instructions: Produce a slow, deliberate outline of the requested document.
+          model:
+            provider: openai-compatible
+            name: gpt-4.1-mini
+            max_output_tokens: 256
+      - name: details
+        agent:
+          name: details
+          instructions: Produce slow, deliberate supporting details for the document.
+          model:
+            provider: openai-compatible
+            name: gpt-4.1-mini
+            max_output_tokens: 256
+    outputs:
+      - aggregate

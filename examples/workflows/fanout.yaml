@@ -1,0 +1,48 @@
+version: "1"
+name: fanout
+description: A fan-out phase with three branches joined by "all", then a summary phase.
+phases:
+  - name: review
+    mode: fanout
+    join:
+      rule: all
+    branches:
+      - name: correctness
+        agent:
+          name: correctness
+          instructions: Review the change for correctness defects and note each one.
+          model:
+            provider: openai-compatible
+            name: gpt-4.1-mini
+            max_output_tokens: 256
+      - name: security
+        agent:
+          name: security
+          instructions: Review the change for security weaknesses and note each one.
+          model:
+            provider: openai-compatible
+            name: gpt-4.1-mini
+            max_output_tokens: 256
+      - name: performance
+        agent:
+          name: performance
+          instructions: Review the change for performance risks and note each one.
+          model:
+            provider: openai-compatible
+            name: gpt-4.1-mini
+            max_output_tokens: 256
+    outputs:
+      - aggregate
+  - name: summarise
+    mode: single
+    depends_on:
+      - review
+    agent:
+      name: summariser
+      instructions: Summarise the review findings into one short report.
+      model:
+        provider: openai-compatible
+        name: gpt-4.1-mini
+        max_output_tokens: 256
+    outputs:
+      - report

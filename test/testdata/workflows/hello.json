@@ -1,0 +1,21 @@
+{
+  "version": "1",
+  "name": "hello",
+  "description": "The same single-phase workflow as hello.yaml, written as JSON.",
+  "phases": [
+    {
+      "name": "greet",
+      "mode": "single",
+      "agent": {
+        "name": "writer",
+        "instructions": "Write one short greeting for the subject named in the input.",
+        "model": {
+          "provider": "openai-compatible",
+          "name": "gpt-4.1-mini",
+          "max_output_tokens": 128
+        }
+      },
+      "outputs": ["plan"]
+    }
+  ]
+}

@@ -1,9 +1,9 @@
 # Project Constitution
 
 **Project**: Zamnius the Multi-Agent Framework (Go)
-**Version**: 0.1.0
+**Version**: 0.2.0
 **Ratified**: 2026-11-11
-**Last Amended**: 2026-11-11
+**Last Amended**: 2026-11-12
 
 This constitution defines the non-negotiable principles that govern all work on the project.
 Any agent (human or AI), using any model, MUST be able to resume an interrupted process from the exact point it was left and continue correctly.
@@ -144,6 +144,25 @@ Given only the persisted artifacts and the current constitution, a fresh agent w
   - Suggest the most appropriate labels from the repository’s label set and always ask the user for confirmation before applying them.
   - Feature PRs target `dev`. Only the integration PR targets `main`.
 
+### XI. Incremental Delivery & Human Review Gates
+
+- Work proceeds **one task at a time**. A *task* is a single numbered entry in the feature's `tasks.md`
+  (for example `T047`) — not a phase, not a user story, and not a batch. Several tasks are never executed in
+  one agent turn.
+- Every task ends with a **mandatory checkpoint**: the agent verifies the task (its own tests plus the
+  project's build and vet gates), then reports what changed, where, and how it was verified, and then
+  **STOPS** and waits for the reviewer's explicit go-ahead before starting the next task.
+- The agent MUST NOT begin task *n+1* while task *n* awaits review, and MUST NOT treat silence, a resumed
+  session, time pressure, or its own confidence as approval.
+- The checkpoint MUST be citable from artifacts rather than chat alone: the task's checkbox and the feature's
+  status section (`tasks.md` → Implementation status) record what is done, what is awaiting review, and the
+  next action, so a fresh session resumes at the same stopping point.
+- Changes MUST stay **review-sized**. Bundling several tasks into one turn or one commit is rejected because a
+  human cannot review a large batch; this is what makes the audit and recoverability guarantees
+  (Principles II and IV) hold for the development process itself.
+- Proceeding in a larger batch requires explicit, per-instance human instruction (for example, "implement
+  `T044`–`T046` without stopping"). The default is always one task, then stop.
+
 ## Governance
 
 - This constitution supersedes ad-hoc instructions when they conflict.
@@ -151,7 +170,16 @@ Given only the persisted artifacts and the current constitution, a fresh agent w
 - Any agent working on the project MUST read the current constitution before starting or resuming work.
 - The constitution itself may be refined and extended; it is not frozen.
 - The dual recoverability requirement (process + product) is the primary acceptance criterion for major changes. Any change that weakens either layer requires explicit justification and a constitution amendment.
+- Compliance with Principle XI is evaluated at every task checkpoint: a fresh session MUST be able to tell from `tasks.md` alone which task is finished, which is awaiting review, and what the next action is.
 
 **Recoverability test (acceptance criterion for every major change)**:
 
 Given only the persisted artifacts and the current constitution, a fresh agent with no prior context MUST be able to determine the exact state of the system and the next correct action.
+
+## Amendment Log
+
+- **0.2.0 (2026-11-12)** — Added Principle XI (Incremental Delivery & Human Review Gates), plus the checkpoint
+  clause in Governance. Rationale: the deliverable must be human-reviewable, and reviewing large batch changes
+  is impractical; work is therefore limited to one `tasks.md` task per turn, each ending in a verified report
+  and a mandatory stop for review. This strengthens, and does not weaken, the process layers of Principle II;
+  no existing principle is relaxed.

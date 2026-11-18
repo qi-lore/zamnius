@@ -1,0 +1,19 @@
+version: "1"
+name: budget-tokens
+description: A workflow whose token budget is small enough to be exhausted by one run.
+budget:
+  tokens: 40
+phases:
+  - name: draft
+    mode: single
+    agent:
+      name: writer
+      instructions: Write a short draft, then a second opinion on it.
+      model:
+        provider: openai-compatible
+        name: gpt-4.1-mini
+        max_output_tokens: 128
+    retry:
+      max_attempts: 3
+    outputs:
+      - plan

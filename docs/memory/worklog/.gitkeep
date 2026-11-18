@@ -1,0 +1,2 @@
+# Placeholder so the flat memory layout survives a fresh clone.
+# Durable entries for this layer are written by /speckit.memory-md.capture, one file per item.

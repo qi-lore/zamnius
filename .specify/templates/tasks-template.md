@@ -13,6 +13,13 @@ description: "Task list template for feature implementation"
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
+**Execution protocol (mandatory — project constitution Principle XI)**: implement **one task at a time** and stop
+for review after each. A *task* is one numbered entry below, not a phase and not a batch. Per task: make the
+change, run the task's tests plus the project's build/vet gates, tick the checkbox, update the status section,
+then **report and wait** — do not begin the next task until the reviewer approves. Never bundle several tasks
+into one turn or one commit; a human reviews each change on its own. Remove this paragraph only if the project
+constitution has no such checkpoint rule.
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
@@ -248,5 +255,8 @@ With multiple developers:
 - Each user story should be independently completable and testable
 - Verify tests fail before implementing
 - Commit after each task or logical group
+- Implement ONE task at a time and stop for human review after each (constitution Principle XI): verify the
+  task's tests plus the build/vet gates, mark it done, report what changed and how it was verified, then wait
+  for approval before starting the next task — never batch several tasks into one turn or one commit
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
