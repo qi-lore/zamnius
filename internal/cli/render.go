@@ -19,7 +19,11 @@ type envelope struct {
 	OK         bool           `json:"ok"`
 	Run        *runView       `json:"run"`
 	Artifacts  []artifactView `json:"artifacts"`
-	Error      *errorView     `json:"error"`
+	// Verification is present only for `run.verify`, so every other command's
+	// envelope is byte-for-byte what it was before the section was added
+	// (contracts/cli.md §2).
+	Verification *zamnius.VerifyReport `json:"verification,omitempty"`
+	Error        *errorView            `json:"error"`
 }
 
 // runView is the run section: the same shape for every command, so a consumer
@@ -146,11 +150,12 @@ func (r *runner) finish(command string, view *runView, artifacts []artifactView,
 
 	if r.json {
 		out := envelope{
-			ApiVersion: ApiVersion,
-			Command:    command,
-			OK:         err == nil,
-			Run:        view,
-			Artifacts:  artifacts,
+			ApiVersion:   ApiVersion,
+			Command:      command,
+			OK:           err == nil,
+			Run:          view,
+			Artifacts:    artifacts,
+			Verification: r.verification,
 		}
 		if err != nil {
 			class := string(domain.ClassOf(err))
