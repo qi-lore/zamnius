@@ -15,12 +15,17 @@ release without a compatibility note.
 
 ## [Unreleased]
 
-Applying [ADR-0010](docs/domain_knowledge/adr/0010-two-configuration-surfaces.md): the two
-configuration surfaces now share one decoder and one definition per shared default, and no setting is
-accepted and then ignored.
+Follow-ups to the 0.1.0 increment. Applying
+[ADR-0010](docs/domain_knowledge/adr/0010-two-configuration-surfaces.md), the two configuration
+surfaces now share one decoder and one definition per shared default, and no setting is accepted and
+then ignored; the command line also gains the verification command the library already had.
 
 ### Added
 
+- `zamnius run verify <run-id>` (**additive — minor**): recomputes a run's event chain and re-hashes
+  every committed artifact against its recorded fingerprint, without resuming the run. It is the
+  command-line counterpart of the library's `Verify`, so every core operation is now available on both
+  surfaces (SC-011); a mismatch exits `6` and names the sequence or digest that disagrees.
 - `Options.LeaseTTL time.Duration` in `pkg/zamnius` (**additive — minor**): the ownership window, with
   zero selecting the 30-second default. The engine always accepted it; only the library surface did not.
 - The process setting `lease_ttl` — a duration such as `45s`, from a config file or

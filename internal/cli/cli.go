@@ -14,6 +14,7 @@ import (
 
 	"github.com/qi-lore/zamnius/internal/config"
 	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/pkg/zamnius"
 )
 
 // Version is the release of this build. The public contract set is versioned
@@ -42,6 +43,7 @@ const usage = `usage:
   zamnius run resume   <run-id> [--file <path>] [--state-dir <dir>] [--config <path>] [--allow-definition-drift] [--json]
   zamnius run status   <run-id> [--state-dir <dir>] [--json]
   zamnius run artifacts <run-id> [--state-dir <dir>] [--out <dir>] [--json]
+  zamnius run verify   <run-id> [--state-dir <dir>] [--json]
   zamnius version`
 
 // Run executes one command line and returns the process exit code. Output is
@@ -77,6 +79,10 @@ type runner struct {
 	// json is set once the flags are parsed, because the renderer is shared by
 	// every command and must not re-parse anything.
 	json bool
+	// verification carries the report of the only command that produces one, so the
+	// shared renderer can attach it to the envelope without every caller passing it
+	// (contracts/cli.md §2).
+	verification *zamnius.VerifyReport
 }
 
 // version prints the build and the envelope version it speaks.
@@ -99,6 +105,8 @@ func (r *runner) runCommand(args []string) int {
 		return r.runStatus(rest)
 	case "artifacts":
 		return r.runArtifacts(rest)
+	case "verify":
+		return r.runVerify(rest)
 	case "resume":
 		return r.runResume(rest)
 	default:
