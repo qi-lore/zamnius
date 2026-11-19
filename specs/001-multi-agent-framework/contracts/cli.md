@@ -110,6 +110,7 @@ with `1`; the run stays resumable either way.
 | `ZAMNIUS_LOG_LEVEL` | `debug` \| `info` \| `warn` \| `error` (default `info`) |
 | `ZAMNIUS_LOG_FORMAT` | `text` \| `json` (default `text`; `json` required for machine ingestion) |
 | `ZAMNIUS_MAX_CONCURRENCY` | Parallel branches per phase; integer `>= 1` (default `8`) |
+| `ZAMNIUS_LEASE_TTL` | Ownership window as a duration (`45s`, `2m`); default `30s`, minimum `1s` |
 
 Precedence: flag > environment > config file > discovered config > built-in default.
 
