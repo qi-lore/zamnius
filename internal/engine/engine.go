@@ -24,12 +24,14 @@ import (
 )
 
 // Default execution settings. They are constants because a silently different
-// default would change the observable behaviour of a resumed run.
+// default would change the observable behaviour of a resumed run. The values are
+// defined once in domain so the process-settings surface (config) cannot default
+// to a different number than the engine enforces (ADR-0010).
 const (
 	// DefaultMaxConcurrency caps parallel branches (contracts/store.md §2, FR-004).
-	DefaultMaxConcurrency = 8
+	DefaultMaxConcurrency = domain.DefaultMaxConcurrency
 	// DefaultLeaseTTL is the ownership window; renewal happens at TTL/3 (T048).
-	DefaultLeaseTTL = 30 * time.Second
+	DefaultLeaseTTL = domain.DefaultLeaseTTL
 )
 
 // Model is the model port as the engine sees it. It is declared here rather than

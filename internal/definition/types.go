@@ -98,8 +98,15 @@ type AgentRef struct {
 // ModelRef names the provider and model an agent uses. The provider is resolved
 // through a registry, never constructed here (FR-059).
 type ModelRef struct {
-	Provider        string   `json:"provider" yaml:"provider" toml:"provider"`
-	Name            string   `json:"name" yaml:"name" toml:"name"`
+	Provider string `json:"provider" yaml:"provider" toml:"provider"`
+	Name     string `json:"name" yaml:"name" toml:"name"`
+	// BaseURL is legacy, and its position here is deliberate: field order decides
+	// the byte order of the canonical snapshot, so moving it would change the
+	// fingerprint of a run started by v0.1.0 from a definition that set it.
+	// v0.1.0 accepted the key and never read it — the provider endpoint has always
+	// come from domain.ModelBaseURLEnvVar — and a definition that sets it is now
+	// refused by Validate (ADR-0010). The field survives only so FromSnapshot still
+	// decodes a snapshot written by v0.1.0.
 	BaseURL         string   `json:"base_url,omitempty" yaml:"base_url,omitempty" toml:"base_url,omitempty"`
 	MaxOutputTokens int      `json:"max_output_tokens,omitempty" yaml:"max_output_tokens,omitempty" toml:"max_output_tokens,omitempty"`
 	Temperature     *float64 `json:"temperature,omitempty" yaml:"temperature,omitempty" toml:"temperature,omitempty"`

@@ -6,6 +6,8 @@ package observability
 import (
 	"os"
 	"strings"
+
+	"github.com/qi-lore/zamnius/internal/domain"
 )
 
 // RedactedValue replaces a recognised secret in any log record.
@@ -13,7 +15,7 @@ const RedactedValue = "[REDACTED]"
 
 // SecretEnvVar is where the reference adapter's key lives. It is never logged,
 // recorded in an event, or written into an artifact.
-const SecretEnvVar = "ZAMNIUS_MODEL_API_KEY"
+const SecretEnvVar = domain.ModelAPIKeyEnvVar
 
 // SecretValues returns the secret values currently present in the environment.
 // Empty values are skipped so a missing key cannot turn every string into a

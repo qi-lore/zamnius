@@ -9,10 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goccy/go-yaml"
-	toml "github.com/pelletier/go-toml/v2"
-
 	"github.com/qi-lore/zamnius/internal/domain"
+	"github.com/qi-lore/zamnius/internal/strict"
 )
 
 // Format identifies a declarative definition encoding.
@@ -67,26 +65,19 @@ func LoadFile(ctx context.Context, path string) (Definition, error) {
 	return Decode(data, format)
 }
 
-// Decode parses data in the given format and normalizes the result.
+// Decode parses data in the given format and normalizes the result. Decoding is
+// strict through internal/strict, so an unknown key or a duplicated key is refused
+// exactly as it is in a process-settings file (ADR-0010).
 func Decode(data []byte, format Format) (Definition, error) {
 	var def Definition
+	var err error
 	switch format {
 	case FormatYAML:
-		if err := yaml.UnmarshalWithOptions(data, &def, yaml.Strict()); err != nil {
-			return Definition{}, decodeError(err)
-		}
+		err = strict.YAML(data, &def)
 	case FormatJSON:
-		decoder := json.NewDecoder(bytes.NewReader(data))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&def); err != nil {
-			return Definition{}, decodeError(err)
-		}
+		err = strict.JSON(data, &def)
 	case FormatTOML:
-		decoder := toml.NewDecoder(bytes.NewReader(data))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&def); err != nil {
-			return Definition{}, decodeError(err)
-		}
+		err = strict.TOML(data, &def)
 	default:
 		return Definition{}, &domain.Error{
 			Class: domain.ErrClassPermanent,
@@ -95,11 +86,16 @@ func Decode(data []byte, format Format) (Definition, error) {
 			Err:   domain.ErrInvalidDefinition,
 		}
 	}
+	if err != nil {
+		return Definition{}, decodeError(err)
+	}
 	return Normalize(def)
 }
 
 // FromSnapshot restores the definition a run was created with. The snapshot is
-// canonical JSON, so resume never depends on the file the operator still has.
+// canonical JSON written by this program, so resume never depends on the file the
+// operator still has. It stays strict — a snapshot is not operator input, and a
+// field this build no longer knows is evidence of corruption, not of a typo.
 func FromSnapshot(snapshot []byte) (Definition, error) {
 	var def Definition
 	decoder := json.NewDecoder(bytes.NewReader(snapshot))

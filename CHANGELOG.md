@@ -13,6 +13,47 @@ release without a compatibility note.
 
 ---
 
+## [0.2.0] - 2026-11-19
+
+Follow-ups to the 0.1.0 increment. Applying
+[ADR-0010](docs/domain_knowledge/adr/0010-two-configuration-surfaces.md), the two configuration
+surfaces now share one decoder and one definition per shared default, and no setting is accepted and
+then ignored; the command line also gains the verification command the library already had. The build
+reports `zamnius 0.2.0` (`api_version "1"`, `schema 1`) and the release is tagged `v0.2.0`.
+
+### Added
+
+- `zamnius run verify <run-id>` (**additive — minor**): recomputes a run's event chain and re-hashes
+  every committed artifact against its recorded fingerprint, without resuming the run. It is the
+  command-line counterpart of the library's `Verify`, so every core operation is now available on both
+  surfaces (SC-011); a mismatch exits `6` and names the sequence or digest that disagrees.
+- `Options.LeaseTTL time.Duration` in `pkg/zamnius` (**additive — minor**): the ownership window, with
+  zero selecting the 30-second default. The engine always accepted it; only the library surface did not.
+- The process setting `lease_ttl` — a duration such as `45s`, from a config file or
+  `ZAMNIUS_LEASE_TTL`, minimum `1s`, default `30s`. A shorter window recovers faster from a killed
+  process, a longer one tolerates a slower machine.
+
+### Changed
+
+- **A workflow definition that sets `model.base_url` is now refused** (definition format change). The
+  key was accepted and silently ignored since 0.1.0 — the endpoint came from `ZAMNIUS_MODEL_BASE_URL`
+  whatever the file said — so the refusal names that variable. A snapshot written by 0.1.0 may still
+  carry the field, and such a snapshot is still decoded, so a run started then still resumes.
+- `agent.model.base_url` removed from
+  [`contracts/workflow-definition.schema.json`](specs/001-multi-agent-framework/contracts/workflow-definition.schema.json).
+
+### Fixed
+
+- A duplicate key in a JSON workflow definition is refused instead of silently keeping the last value.
+  `internal/strict` is now the one decoder for both surfaces, so a document refused as a
+  process-settings file cannot be accepted as a definition.
+- An unknown key in a TOML document now names the key in the hint; the library's strict-mode error
+  reported only that "fields in the document are missing in the target struct".
+- The concurrency default is defined once (`domain.DefaultMaxConcurrency`) and aliased by the engine
+  and the process settings alike, so the two can no longer drift apart.
+
+---
+
 ## [0.1.0] - 2026-11-18
 
 The first increment: ordered phases with fan-out/join, recoverability, and audit reconstruction.

@@ -30,10 +30,10 @@ git clone https://github.com/qi-lore/zamnius && cd zamnius
 go build ./...                              # compiles everything
 go build -o bin/zamnius ./cmd/zamnius       # the CLI
 ./bin/zamnius version
-# zamnius 0.1.0 (api_version "1", schema 1)
+# zamnius 0.2.0 (api_version "1", schema 1)
 ```
 
-`go install github.com/qi-lore/zamnius/cmd/zamnius@v0.1.0` installs the CLI without a checkout; the
+`go install github.com/qi-lore/zamnius/cmd/zamnius@v0.2.0` installs the CLI without a checkout; the
 build below compiles the same source. The repository is self-contained: `go test ./... -count=1`
 needs no network and no provider key.
 
@@ -69,6 +69,25 @@ $ echo $?
 Anything that answers `POST /chat/completions` with the OpenAI chat-completions shape works — a local
 stub, a gateway, or the real service. A definition names its provider as `openai-compatible` and its
 model by name; the provider root comes from the environment, not from the definition.
+
+## Configuration surfaces
+
+Two surfaces, one test ([ADR-0010](docs/domain_knowledge/adr/0010-two-configuration-surfaces.md)):
+
+1. Does it change **what is committed or refused** for a run? → the workflow definition.
+2. Does it change **where or how** the process runs? → the process settings.
+3. Is it a **credential**? → the environment only.
+
+| Setting | Surface | Sources | Snapshot |
+|---|---|---|---|
+| phases, agents, joins, retries, timeouts, budgets, `defaults` | definition | YAML / JSON / TOML or the builder | yes — drift is refused |
+| `model.provider`, `model.name`, `model.temperature`, `model.max_output_tokens` | definition | as above | yes |
+| `state_dir`, `log_level`, `log_format`, `max_concurrency`, `lease_ttl` | process settings | flag > env > `--config` > discovered file > default | no |
+| `base_url` for the provider | process settings | `ZAMNIUS_MODEL_BASE_URL` | no |
+| `ZAMNIUS_MODEL_API_KEY` | secrets | environment only | never — redacted before persistence |
+
+A definition never decides where state lives or how loudly it logs; a config file never decides what
+a phase does. Adding a setting to the wrong surface is what keeps a resume from reproducing a run.
 
 ## Your first run
 
@@ -272,8 +291,9 @@ last events:
 ```
 
 The run is left `running`, and the log already shows the `details` branch committed. A `kill -9`
-releases nothing, so the dead process still holds the ownership lease for up to 30 seconds; a resume
-inside that window is refused with exit `4` and a hint naming the owner and its expiry:
+releases nothing, so the dead process still holds the ownership lease until it expires — 30 seconds by
+default, or whatever `lease_ttl` / `ZAMNIUS_LEASE_TTL` says. A resume inside that window is refused with
+exit `4` and a hint naming the owner and its expiry:
 
 ```console
 $ bin/zamnius run resume cc146e73-a19d-4ad0-a75d-e81c3f0135a3
@@ -400,6 +420,7 @@ is a disclosure risk.
 | log level | `ZAMNIUS_LOG_LEVEL`, `log_level` — `debug`, `info` (default), `warn`, `error` |
 | log format | `ZAMNIUS_LOG_FORMAT`, `log_format` — `text` (default) or `json` |
 | branch concurrency | `ZAMNIUS_MAX_CONCURRENCY`, `max_concurrency` — default 8 |
+| ownership lease | `ZAMNIUS_LEASE_TTL`, `lease_ttl` — a duration such as `45s`; default `30s`, minimum `1s` |
 
 A config file is found in the working directory under one of `zamnius.yaml`, `.zamnius.yaml`,
 `zamnius.json`, `zamnius.toml`, or named explicitly with `--config`. Precedence is flags >

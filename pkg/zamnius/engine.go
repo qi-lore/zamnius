@@ -58,6 +58,10 @@ type Options struct {
 	// IDSource mints identifiers. Optional; tests inject a counter so run and
 	// attempt ids are predictable.
 	IDSource func() uuid.UUID
+	// LeaseTTL is the ownership window: how long a run's lease stays valid without
+	// a renewal. Optional; zero selects the default (30s). A shorter window recovers
+	// faster from a killed process, a longer one tolerates a slower machine.
+	LeaseTTL time.Duration
 }
 
 // Engine drives workflow runs. One instance may advance many runs, but only one
@@ -85,6 +89,7 @@ func New(opts Options) (*Engine, error) {
 		Logger:    opts.Logger,
 		Clock:     opts.Clock,
 		IDSource:  opts.IDSource,
+		LeaseTTL:  opts.LeaseTTL,
 	})
 	if err != nil {
 		return nil, err
