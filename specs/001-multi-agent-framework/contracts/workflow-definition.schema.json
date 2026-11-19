@@ -86,7 +86,6 @@
       "properties": {
         "provider": { "type": "string", "enum": ["openai-compatible"] },
         "name": { "type": "string", "minLength": 1 },
-        "base_url": { "type": "string", "format": "uri" },
         "max_output_tokens": { "type": "integer", "minimum": 1 },
         "temperature": { "type": "number", "minimum": 0, "maximum": 2 }
       }
