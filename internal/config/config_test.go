@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/qi-lore/zamnius/internal/config"
 	"github.com/qi-lore/zamnius/internal/domain"
@@ -23,6 +24,7 @@ func TestDefaultsWhenNothingIsSupplied(t *testing.T) {
 		LogLevel:       config.DefaultLogLevel,
 		LogFormat:      config.DefaultLogFormat,
 		MaxConcurrency: config.DefaultMaxConcurrency,
+		LeaseTTL:       config.DefaultLeaseTTL,
 	}
 	if settings != want {
 		t.Errorf("settings = %+v, want %+v", settings, want)
@@ -170,6 +172,16 @@ func TestInvalidValuesNameTheSettingAndAcceptedValues(t *testing.T) {
 			source: config.Sources{Overrides: config.Overrides{StateDir: strPtr("  ")}},
 			want:   `setting "state_dir" must not be empty`,
 		},
+		{
+			name:   "lease ttl not a duration",
+			source: config.Sources{Environ: []string{"ZAMNIUS_LEASE_TTL=soon"}},
+			want:   "ZAMNIUS_LEASE_TTL must be a duration such as 30s or 2m; got \"soon\"",
+		},
+		{
+			name:   "lease ttl too short",
+			source: config.Sources{Environ: []string{"ZAMNIUS_LEASE_TTL=50ms"}},
+			want:   `setting "lease_ttl" must be at least 1s; got 50ms`,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -211,6 +223,71 @@ func TestMissingFileIsRefusedWithHint(t *testing.T) {
 	}
 	if domain.HintOf(err) == "" {
 		t.Error("missing configuration must carry a hint naming the file")
+	}
+}
+
+// TestLeaseTTLIsConfigurable covers the setting ADR-0010 promoted out of the
+// library: the ownership window is host policy, so an operator on a slow machine
+// can widen it and one who needs fast recovery after a kill can narrow it, in all
+// three formats and from the environment.
+func TestLeaseTTLIsConfigurable(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		source func(t *testing.T) config.Sources
+		want   time.Duration
+	}{
+		{
+			name: "yaml file",
+			source: func(t *testing.T) config.Sources {
+				path := filepath.Join(t.TempDir(), "zamnius.yaml")
+				writeFile(t, path, "lease_ttl: 45s\n")
+				return config.Sources{ExplicitFile: path}
+			},
+			want: 45 * time.Second,
+		},
+		{
+			name: "json file",
+			source: func(t *testing.T) config.Sources {
+				path := filepath.Join(t.TempDir(), "zamnius.json")
+				writeFile(t, path, `{"lease_ttl":"2m"}`)
+				return config.Sources{ExplicitFile: path}
+			},
+			want: 2 * time.Minute,
+		},
+		{
+			name: "toml file",
+			source: func(t *testing.T) config.Sources {
+				path := filepath.Join(t.TempDir(), "zamnius.toml")
+				writeFile(t, path, "lease_ttl = \"90s\"\n")
+				return config.Sources{ExplicitFile: path}
+			},
+			want: 90 * time.Second,
+		},
+		{
+			name: "environment beats the file",
+			source: func(t *testing.T) config.Sources {
+				path := filepath.Join(t.TempDir(), "zamnius.yaml")
+				writeFile(t, path, "lease_ttl: 45s\n")
+				return config.Sources{ExplicitFile: path, Environ: []string{"ZAMNIUS_LEASE_TTL=5s"}}
+			},
+			want: 5 * time.Second,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			settings, err := config.Load(context.Background(), tc.source(t))
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if settings.LeaseTTL != tc.want {
+				t.Errorf("lease_ttl = %s, want %s", settings.LeaseTTL, tc.want)
+			}
+		})
 	}
 }
 
