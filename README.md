@@ -30,10 +30,10 @@ git clone https://github.com/qi-lore/zamnius && cd zamnius
 go build ./...                              # compiles everything
 go build -o bin/zamnius ./cmd/zamnius       # the CLI
 ./bin/zamnius version
-# zamnius 0.1.0 (api_version "1", schema 1)
+# zamnius 0.2.0 (api_version "1", schema 1)
 ```
 
-`go install github.com/qi-lore/zamnius/cmd/zamnius@v0.1.0` installs the CLI without a checkout; the
+`go install github.com/qi-lore/zamnius/cmd/zamnius@v0.2.0` installs the CLI without a checkout; the
 build below compiles the same source. The repository is self-contained: `go test ./... -count=1`
 needs no network and no provider key.
 

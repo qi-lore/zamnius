@@ -13,12 +13,13 @@ release without a compatibility note.
 
 ---
 
-## [Unreleased]
+## [0.2.0] - 2026-11-19
 
 Follow-ups to the 0.1.0 increment. Applying
 [ADR-0010](docs/domain_knowledge/adr/0010-two-configuration-surfaces.md), the two configuration
 surfaces now share one decoder and one definition per shared default, and no setting is accepted and
-then ignored; the command line also gains the verification command the library already had.
+then ignored; the command line also gains the verification command the library already had. The build
+reports `zamnius 0.2.0` (`api_version "1"`, `schema 1`) and the release is tagged `v0.2.0`.
 
 ### Added
 
