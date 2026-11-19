@@ -70,6 +70,25 @@ Anything that answers `POST /chat/completions` with the OpenAI chat-completions 
 stub, a gateway, or the real service. A definition names its provider as `openai-compatible` and its
 model by name; the provider root comes from the environment, not from the definition.
 
+## Configuration surfaces
+
+Two surfaces, one test ([ADR-0010](docs/domain_knowledge/adr/0010-two-configuration-surfaces.md)):
+
+1. Does it change **what is committed or refused** for a run? → the workflow definition.
+2. Does it change **where or how** the process runs? → the process settings.
+3. Is it a **credential**? → the environment only.
+
+| Setting | Surface | Sources | Snapshot |
+|---|---|---|---|
+| phases, agents, joins, retries, timeouts, budgets, `defaults` | definition | YAML / JSON / TOML or the builder | yes — drift is refused |
+| `model.provider`, `model.name`, `model.temperature`, `model.max_output_tokens` | definition | as above | yes |
+| `state_dir`, `log_level`, `log_format`, `max_concurrency` | process settings | flag > env > `--config` > discovered file > default | no |
+| `base_url` for the provider | process settings | `ZAMNIUS_MODEL_BASE_URL` | no |
+| `ZAMNIUS_MODEL_API_KEY` | secrets | environment only | never — redacted before persistence |
+
+A definition never decides where state lives or how loudly it logs; a config file never decides what
+a phase does. Adding a setting to the wrong surface is what keeps a resume from reproducing a run.
+
 ## Your first run
 
 `examples/workflows/hello.yaml` is a one-phase workflow:
