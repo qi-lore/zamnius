@@ -82,7 +82,7 @@ Two surfaces, one test ([ADR-0010](docs/domain_knowledge/adr/0010-two-configurat
 |---|---|---|---|
 | phases, agents, joins, retries, timeouts, budgets, `defaults` | definition | YAML / JSON / TOML or the builder | yes — drift is refused |
 | `model.provider`, `model.name`, `model.temperature`, `model.max_output_tokens` | definition | as above | yes |
-| `state_dir`, `log_level`, `log_format`, `max_concurrency` | process settings | flag > env > `--config` > discovered file > default | no |
+| `state_dir`, `log_level`, `log_format`, `max_concurrency`, `lease_ttl` | process settings | flag > env > `--config` > discovered file > default | no |
 | `base_url` for the provider | process settings | `ZAMNIUS_MODEL_BASE_URL` | no |
 | `ZAMNIUS_MODEL_API_KEY` | secrets | environment only | never — redacted before persistence |
 
@@ -291,8 +291,9 @@ last events:
 ```
 
 The run is left `running`, and the log already shows the `details` branch committed. A `kill -9`
-releases nothing, so the dead process still holds the ownership lease for up to 30 seconds; a resume
-inside that window is refused with exit `4` and a hint naming the owner and its expiry:
+releases nothing, so the dead process still holds the ownership lease until it expires — 30 seconds by
+default, or whatever `lease_ttl` / `ZAMNIUS_LEASE_TTL` says. A resume inside that window is refused with
+exit `4` and a hint naming the owner and its expiry:
 
 ```console
 $ bin/zamnius run resume cc146e73-a19d-4ad0-a75d-e81c3f0135a3
@@ -419,6 +420,7 @@ is a disclosure risk.
 | log level | `ZAMNIUS_LOG_LEVEL`, `log_level` — `debug`, `info` (default), `warn`, `error` |
 | log format | `ZAMNIUS_LOG_FORMAT`, `log_format` — `text` (default) or `json` |
 | branch concurrency | `ZAMNIUS_MAX_CONCURRENCY`, `max_concurrency` — default 8 |
+| ownership lease | `ZAMNIUS_LEASE_TTL`, `lease_ttl` — a duration such as `45s`; default `30s`, minimum `1s` |
 
 A config file is found in the working directory under one of `zamnius.yaml`, `.zamnius.yaml`,
 `zamnius.json`, `zamnius.toml`, or named explicitly with `--config`. Precedence is flags >
