@@ -19,7 +19,7 @@ import (
 
 // Version is the release of this build. The public contract set is versioned
 // independently: see ApiVersion.
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // ApiVersion is the version of the --json envelope (contracts/cli.md §2).
 const ApiVersion = "1"
