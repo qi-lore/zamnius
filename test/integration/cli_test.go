@@ -506,3 +506,97 @@ func TestCLIArtifactsExportAbortsOnACorruptedFile(t *testing.T) {
 		t.Errorf("a corrupted artifact was exported: %v", entries)
 	}
 }
+
+// TestCLISurfaceMatchesTheDocumentedOperations locks the parity SC-011 asks for:
+// every core operation the library documents has a command-line counterpart. The
+// library's five operations are Start, Resume, Status, Artifacts, and Verify
+// (contracts/library-api.md §Entry point), so the usage text must advertise all
+// five. Verification was the missing one until this command existed.
+func TestCLISurfaceMatchesTheDocumentedOperations(t *testing.T) {
+	env := newCLIEnv(t)
+
+	code, stdout, stderr := env.run("help")
+	if code != 0 {
+		t.Fatalf("help exit = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	for _, operation := range []string{"start", "resume", "status", "artifacts", "verify"} {
+		if !strings.Contains(stdout, "run "+operation) {
+			t.Errorf("the CLI does not advertise `run %s`, which the library documents", operation)
+		}
+	}
+}
+
+// TestCLIVerifyAcceptsACleanRunAndRefusesACorruptedOne proves the command the
+// parity criterion needs: a finished run can be checked without resuming it. A
+// clean record verifies with exit `0`; a tampered artifact file is exit `6`, and
+// both the error and the structured verification section name the digest that
+// disagrees (contracts/cli.md §1, §2, §3).
+func TestCLIVerifyAcceptsACleanRunAndRefusesACorruptedOne(t *testing.T) {
+	env := newCLIEnv(t)
+
+	code, envelope, stderr := env.runJSON("run", "start", "--file", fixture(t, "hello.yaml"), "--state-dir", env.stateDir)
+	if code != 0 {
+		t.Fatalf("run start exit = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	id := runID(t, envelope)
+
+	// A clean run verifies: the command is named, the verification section carries
+	// the counts, and no problem is reported.
+	code, verifyEnvelope, stderr := env.runJSON("run", "verify", id, "--state-dir", env.stateDir)
+	if code != 0 {
+		t.Fatalf("run verify exit = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if got := verifyEnvelope["command"]; got != "run.verify" {
+		t.Errorf("command = %v, want run.verify", got)
+	}
+	verification, ok := verifyEnvelope["verification"].(map[string]any)
+	if !ok {
+		t.Fatalf("envelope has no verification object: %v", verifyEnvelope)
+	}
+	if got, _ := verification["events"].(float64); got <= 0 {
+		t.Errorf("verification.events = %v, want the run's event count", verification["events"])
+	}
+	if problems, present := verification["problems"]; present {
+		t.Errorf("a clean run reported problems: %v", problems)
+	}
+
+	artifacts := artifactsOf(t, envelope)
+	if len(artifacts) == 0 {
+		t.Fatal("run produced no artifacts to corrupt")
+	}
+	sha, _ := artifacts[0]["sha256"].(string)
+
+	// Corrupt the stored content-addressed file, exactly as the export test does:
+	// the row and its recorded digest stay intact, so the disagreement is real.
+	casFile := filepath.Join(app.PathsFor(env.stateDir).Artifacts, sha[:2], sha)
+	if err := os.WriteFile(casFile, []byte("tampered content"), 0o600); err != nil {
+		t.Fatalf("corrupt the stored artifact %s: %v", casFile, err)
+	}
+
+	code, corruptEnvelope, stderr := env.runJSON("run", "verify", id, "--state-dir", env.stateDir)
+	if code != 6 {
+		t.Fatalf("corrupted verify exit = %d, want 6 (stderr: %s)", code, stderr)
+	}
+	if got := corruptEnvelope["ok"]; got != false {
+		t.Errorf("ok = %v, want false", got)
+	}
+	failure, ok := corruptEnvelope["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("error = %v, want an object", corruptEnvelope["error"])
+	}
+	if hint, _ := failure["hint"].(string); !strings.Contains(hint, sha) {
+		t.Errorf("error.hint = %q, want it to name the offending digest", hint)
+	}
+	corruptVerification, ok := corruptEnvelope["verification"].(map[string]any)
+	if !ok {
+		t.Fatalf("failed envelope has no verification object: %v", corruptEnvelope)
+	}
+	problems, ok := corruptVerification["problems"].([]any)
+	if !ok || len(problems) == 0 {
+		t.Fatalf("verification.problems = %v, want at least one", corruptVerification["problems"])
+	}
+	first, _ := problems[0].(map[string]any)
+	if got, _ := first["sha256"].(string); got != sha {
+		t.Errorf("problem sha256 = %v, want %s", first["sha256"], got)
+	}
+}
