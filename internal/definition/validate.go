@@ -3,7 +3,6 @@ package definition
 import (
 	"fmt"
 	"math"
-	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -380,10 +379,13 @@ func validateAgent(path string, agent AgentRef) error {
 		return invalid(modelPath+".name", "is required")
 	}
 	if agent.Model.BaseURL != "" {
-		parsed, err := url.Parse(agent.Model.BaseURL)
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			return invalid(modelPath+".base_url", "must be an absolute URI, got %q", agent.Model.BaseURL)
-		}
+		// The provider root is process configuration, not run semantics: a
+		// definition that carried one would be snapshotted and replayed on a
+		// machine where the endpoint does not exist (ADR-0010). Refusing it is the
+		// point — v0.1.0 accepted it and silently ignored it.
+		return invalid(modelPath+".base_url",
+			"is not a definition setting: the provider root comes from the environment, set %s instead",
+			domain.ModelBaseURLEnvVar)
 	}
 	if agent.Model.MaxOutputTokens < 0 {
 		return invalid(modelPath+".max_output_tokens", "must be >= 1 when set, got %d", agent.Model.MaxOutputTokens)
