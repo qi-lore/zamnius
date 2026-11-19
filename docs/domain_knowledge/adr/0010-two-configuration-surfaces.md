@@ -1,6 +1,6 @@
 # ADR-0010: Two configuration surfaces — workflow definition and process settings
 
-**Status**: proposed · 2026-11-19
+**Status**: accepted · 2026-11-19
 
 ## Context
 
