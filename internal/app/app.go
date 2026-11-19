@@ -28,9 +28,10 @@ import (
 const Provider = "openai-compatible"
 
 // BaseURLEnvVar names the environment variable the reference adapter reads its
-// provider root from. It is not a secret, so it lives here with the composition
-// that consumes it rather than with the redaction helpers.
-const BaseURLEnvVar = "ZAMNIUS_MODEL_BASE_URL"
+// provider root from. It is not a secret; the name itself lives in domain so the
+// definition validator can refuse a base_url in a definition and point at the same
+// variable this composition root reads.
+const BaseURLEnvVar = domain.ModelBaseURLEnvVar
 
 // dirMode keeps the state directory owner-only: it holds the audit record, and a
 // world-readable trail is a disclosure risk (FR-054).
@@ -119,6 +120,20 @@ func Open(ctx context.Context, settings config.Settings) (*App, error) {
 // close for them.
 func (a *App) Close() error { return a.Store.Close() }
 
+// engineOptions maps the resolved process settings onto library options. It is a
+// named function so the mapping has one home and one test: a setting an operator
+// changed must actually reach the engine, which is what ADR-0010's config surface
+// promises and what a resumed run may legitimately vary.
+func (a *App) engineOptions(models zamnius.ModelRegistry) zamnius.Options {
+	return zamnius.Options{
+		Store:     a.Store,
+		Artifacts: a.Artifacts,
+		Models:    models,
+		Logger:    a.Logger,
+		LeaseTTL:  a.Settings.LeaseTTL,
+	}
+}
+
 // Engine builds the engine over the opened stores, constructing the reference
 // model adapter from the environment. It is called only by commands that execute
 // work, so a missing credential fails those commands and leaves inspection
@@ -137,12 +152,7 @@ func (a *App) Engine() (*zamnius.Engine, error) {
 	}
 
 	registry := registryAdapter{inner: model.NewRegistry().Register(Provider, client)}
-	engine, err := zamnius.New(zamnius.Options{
-		Store:     a.Store,
-		Artifacts: a.Artifacts,
-		Models:    registry,
-		Logger:    a.Logger,
-	})
+	engine, err := zamnius.New(a.engineOptions(registry))
 	if err != nil {
 		return nil, err
 	}

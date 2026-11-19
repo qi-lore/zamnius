@@ -41,7 +41,7 @@ Validated from a declarative document or built programmatically; both produce th
 ### Branch, AgentRef, JoinPolicy, Budget, Retry, Condition
 
 - **Branch**: `{ name, agent: AgentRef, budget?, timeout? }`. Only valid in a fan-out phase.
-- **AgentRef**: `{ name, instructions, model: {provider, name, base_url?, max_output_tokens?, temperature?}, budget? }`. Instructions are inline text; external prompt files are a later increment.
+- **AgentRef**: `{ name, instructions, model: {provider, name, max_output_tokens?, temperature?}, budget? }`. Instructions are inline text; external prompt files are a later increment.
 - **JoinPolicy**: `{ rule: "all" | "any" | "n_of_m", n?: int }`. `n` required and `2 <= n <= branch count` when `rule=n_of_m`. Aggregation is deterministic: branch results ordered by declared branch order.
 - **Budget**: `{ attempts?: int >= 1, wall_clock?: duration, tokens?: int >= 1 }`. At least one field when present.
 - **Retry**: `{ max_attempts: int >= 1, backoff: {initial, max, multiplier}, retry_on: ErrorClass[] }`. Default `max_attempts: 1` (no retry), `initial: 1s`, `max: 30s`, `multiplier: 2`, `retry_on: [transient, rate_limited]`.

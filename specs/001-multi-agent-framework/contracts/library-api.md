@@ -23,9 +23,9 @@ type Options struct {
     Artifacts ArtifactStore   // required
     Models    ModelRegistry   // required
     Logger    *slog.Logger    // optional; defaults to slog.DiscardHandler
-    Tracer    trace.Tracer    // optional
     Clock     func() time.Time // optional; tests inject a deterministic clock
     IDSource  func() uuid.UUID // optional; tests inject deterministic ids
+    LeaseTTL  time.Duration    // optional; ownership window, 0 selects the 30s default
 }
 ```
 

@@ -166,8 +166,8 @@ func TestNormalizeRejectsInvalidDefinitions(t *testing.T) {
 		}, "phases[0].agent.instructions"},
 		{"model provider unknown", func(d *definition.Definition) { d.Phases[0].Agent.Model.Provider = "anthropic" }, "phases[0].agent.model.provider"},
 		{"model name empty", func(d *definition.Definition) { d.Phases[0].Agent.Model.Name = "" }, "phases[0].agent.model.name"},
-		{"model base_url relative", func(d *definition.Definition) {
-			d.Phases[0].Agent.Model.BaseURL = "/v1"
+		{"model base_url is refused", func(d *definition.Definition) {
+			d.Phases[0].Agent.Model.BaseURL = "https://example.test/v1"
 		}, "phases[0].agent.model.base_url"},
 		{"model max_output_tokens negative", func(d *definition.Definition) {
 			d.Phases[0].Agent.Model.MaxOutputTokens = -1
