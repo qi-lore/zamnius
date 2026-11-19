@@ -109,8 +109,12 @@ with `1`; the run stays resumable either way.
 | `ZAMNIUS_MODEL_BASE_URL` | Default base URL for the reference adapter |
 | `ZAMNIUS_LOG_LEVEL` | `debug` \| `info` \| `warn` \| `error` (default `info`) |
 | `ZAMNIUS_LOG_FORMAT` | `text` \| `json` (default `text`; `json` required for machine ingestion) |
+| `ZAMNIUS_MAX_CONCURRENCY` | Parallel branches per phase; integer `>= 1` (default `8`) |
 
 Precedence: flag > environment > config file > discovered config > built-in default.
+
+Which setting belongs to which surface — the environment here, a workflow definition there — is
+decided in [ADR-0010](../../../docs/domain_knowledge/adr/0010-two-configuration-surfaces.md).
 
 ---
 
