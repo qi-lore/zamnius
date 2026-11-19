@@ -1,6 +1,6 @@
 # Contract: command-line surface
 
-Binary: `zamnius` (`cmd/zamnius`). Scope: FR-060 — start, resume, status, artifacts.
+Binary: `zamnius` (`cmd/zamnius`). Scope: FR-060 — start, resume, status, artifacts, verify.
 Related: [research.md R5](../research.md), [data-model.md](../data-model.md).
 
 Design rules: no business logic in the command layer; every command is a thin adapter over
@@ -16,6 +16,7 @@ zamnius run start   --file <path> [--state-dir <dir>] [--json]
 zamnius run resume  <run-id> [--file <path>] [--state-dir <dir>] [--allow-definition-drift] [--json]
 zamnius run status  <run-id> [--state-dir <dir>] [--json]
 zamnius run artifacts <run-id> [--state-dir <dir>] [--out <dir>] [--json]
+zamnius run verify  <run-id> [--state-dir <dir>] [--json]
 zamnius version
 ```
 
@@ -60,6 +61,15 @@ five events. `--json` returns the same data as the status view object.
 Lists committed artifacts (`kind`, `sha256`, `bytes`, `phase`). With `--out`, copies them to a
 directory, verifying each fingerprint before writing; any mismatch aborts the command with exit `6`.
 
+### `run verify`
+
+Recomputes the run's event chain and re-hashes every committed artifact against its recorded
+fingerprint, reporting whatever disagrees. Read-only: it takes no lease and needs no credential, so a
+record stays checkable after the key that produced it has expired. Exit `0` when the record verifies
+cleanly; exit `6` when it does not, naming the sequence or digest that disagrees. This is the
+command-line counterpart of the library's `Verify`, so every core operation is available on both
+surfaces (SC-011).
+
 ---
 
 ## 2. `--json` envelope
@@ -78,6 +88,28 @@ Every command emits exactly one object:
 ```
 
 On failure, `ok` is `false` and `error` is `{ "class": "<ErrorClass or usage/config class>", "message": "...", "hint": "..." }`. `hint` is required for configuration and integrity failures and must name the offending setting or file.
+
+`run verify` adds a `verification` section, which no other command carries, and leaves `run` and
+`artifacts` null. The section is present whether the record verifies or not; `problems` is present
+only when there is at least one, and each problem names the sequence or digest that disagrees:
+
+```json
+{
+  "api_version": "1",
+  "command": "run.verify",
+  "ok": false,
+  "run": null,
+  "artifacts": null,
+  "verification": {
+    "run_id": "6f1c1f0e-...",
+    "events": 12,
+    "artifacts": 4,
+    "verified_at": "2026-11-19T04:03:08Z",
+    "problems": [ { "kind": "digest_mismatch", "sha256": "...", "detail": "..." } ]
+  },
+  "error": { "class": "internal", "message": "...", "hint": "..." }
+}
+```
 
 ---
 
@@ -127,3 +159,6 @@ decided in [ADR-0010](../../../docs/domain_knowledge/adr/0010-two-configuration-
 4. SIGTERM during a branch leaves the run `paused` and resumable (subprocess test).
 5. Invalid definition exits `5` and names the offending field path.
 6. `run artifacts --out` with a corrupted file exits `6`.
+7. `run verify` on a clean run exits `0`; on a run whose artifact file or event chain has been tampered
+   with it exits `6`, naming the digest or the sequence.
+8. The CLI advertises a command for every core operation the library documents (SC-011).
