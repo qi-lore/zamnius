@@ -27,7 +27,7 @@ decisions     docs/domain_knowledge/adr/0001–0009           architectural rati
 Chat history is never the source of truth. A fresh agent must be able to resume from these files
 alone (constitution Principle II).
 
-## Current state (2026-11-18)
+## Current state (2026-11-19)
 
 - Spec is grilled and committed; 12 decisions recorded in `spec.md` → `## Clarifications`.
 - Plan, research, data model, contracts, quickstart, and **`tasks.md`** are committed.
@@ -96,9 +96,32 @@ alone (constitution Principle II).
   implemented-but-untested, or untouched — and the design decisions taken along the way, read
   `tasks.md` → `## Implementation status (2026-11-12)`; that section is authoritative until the
   boxes above it are updated.
-- Branch: `001-multi-agent-framework`, commits above the initial commit `0a512c3`. Per the
-  constitution, feature branches target `dev`, not `main`. Working tree is clean; every commit is
-  local.
+- **Release and integration.** v0.1.0 is published: `main` @ `fe5572d`, tag `v0.1.0`, GitHub
+  pre-release. Integration happens on **`dev`**, which is ahead of `main`: the increment landed through
+  PRs #1–#5 and the knowledge and configuration work through #6–#10, each on a short-lived branch with
+  one artifact per commit. `main` receives `dev` only when a release is cut. The feature branch
+  `001-multi-agent-framework` still exists but is no longer where work happens; new work starts from
+  `dev`. Working tree is clean; every commit is local.
+- **The knowledge layer is populated (2026-11-19).** `docs/memory/` no longer has empty sections:
+  `INDEX.md` routes to the fan-out timing flake (the defect that failed the release PR) and to the rule
+  that `go install …@tag` is proved from an empty `GOBIN`, and it states *why* `architecture/` and
+  `worklog/` stay empty — boundaries are canonical in `plan.md` and the ADRs, and the worklog is a
+  ledger of lessons rather than a changelog. `wiki/` holds six cited pages over fourteen registered
+  sources, typed as `wiki/SCHEMA.md` requires. Both layers are **derived views**: they cite
+  `spec.md`/ADRs/`CONTEXT.md` and never override them (ADR-0008). They were written by direct edit
+  because this repository has no MCP server and no `/speckit.*` commands in a session; agreement 9
+  below is what keeps such an edit deliberate rather than incidental.
+- **ADR-0010 fixes the two configuration surfaces** (accepted 2026-11-19): a setting belongs to the
+  **logic** surface if the run snapshots it, to **config** if it changes only how the process runs, and
+  to **the environment** if it is a credential. Its five recorded deviations are closed on
+  `fix/0010-config-followups`: `model.base_url` is refused in a definition rather than accepted and
+  ignored (the struct field survives only so a snapshot written by v0.1.0 still decodes, in the
+  original field order, because the fingerprint is the hash of those bytes); the concurrency default is
+  defined once in `domain`; both surfaces decode through `internal/strict`, so a duplicate JSON key is
+  refused in a definition too; `lease_ttl` / `ZAMNIUS_LEASE_TTL` is a process setting that feeds
+  `Options.LeaseTTL`, while `Owner` stays library-only because takeover evidence must not be
+  self-declared. `README.md` and `contracts/cli.md` §4 list the settings; `CHANGELOG.md` records the
+  additions and the refusal under `## [Unreleased]`.
 - **Ignore files are shared, not branch-local.** `dev` and `main` both derive from the initial
   commit `0a512c3`. On **2026-11-13** `dev` was advanced by the two ignore commits the feature
   branch already carried (`fbde31c`, `0878256`), so both branches now hold **byte-identical**
