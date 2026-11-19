@@ -144,6 +144,13 @@ alone (constitution Principle II).
    and mirror the exact content across branches; never edit an ignore file on a single branch.
    Machine-local noise (Spec Kit catalog caches, agent work plans, local run state) is already
    covered — run `git check-ignore -v <path>` before adding anything.
+9. **Local-only zones are not backups.** `.specify/assessments/`, `notes/`, and `.opencode/plan/` are
+   gitignored on purpose: private discovery research, scratch notes, and working plans. They are
+   untracked by design — `git add -f` on any of them is a defect — and they exist on this machine
+   only, so no clone carries them and `git clean -xdf` deletes them. Never treat them as the record:
+   a conclusion worth keeping is promoted to an ADR, `CONTEXT.md`, or the spec (ADR-0008). Preserve
+   what is still needed by copying it out of the repository — a separate private repository or a
+   private archive — never by committing it here.
 
 ### Spec Kit
 
